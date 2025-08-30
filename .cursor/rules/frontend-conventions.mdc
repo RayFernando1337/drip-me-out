@@ -1,0 +1,182 @@
+---
+globs: app/*.tsx,components/*.tsx,app/**/*.tsx,components/**/*.tsx
+description: Frontend conventions for Next.js 15 App Router and React components
+---
+
+# Frontend Conventions
+
+## Next.js 15 App Router Conventions
+
+### File Structure in `/app`
+
+- `page.tsx`: Page component (defines a route) - MUST be default export
+- `layout.tsx`: Shared layout wrapper
+- `loading.tsx`: Loading UI
+- `error.tsx`: Error boundary
+- `not-found.tsx`: 404 page
+- `route.ts`: API route handler
+
+### Client vs Server Components
+
+- Server Components by default (no `"use client"` needed)
+- Use `"use client"` directive only for components that need:
+  - Browser APIs (camera, localStorage, etc.)
+  - React hooks (useState, useEffect)
+  - Event handlers
+  - Convex hooks (useQuery, useMutation)
+
+## Component Structure Pattern
+
+```typescript
+"use client";  // Only if using hooks or browser APIs
+
+import { ComponentProps } from "react";
+
+interface MyComponentProps {
+  // Define props with TypeScript interfaces
+}
+
+export function MyComponent({ prop1, prop2 }: MyComponentProps) {
+  // Component logic
+  return <div>...</div>;
+}
+```
+
+## Convex Integration Patterns
+
+### Client Components with Convex
+
+```typescript
+"use client";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+export default function Component() {
+  const data = useQuery(api.images.getImages) || [];
+  const mutate = useMutation(api.images.createImage);
+
+  const handleSubmit = async () => {
+    await mutate({ data: "..." });
+  };
+}
+```
+
+### Real-Time Updates
+
+- `useQuery` hooks automatically re-render on data changes
+- No need for manual refresh or polling
+- Always provide fallback: `const data = useQuery(api.endpoint) || []`
+- Handle undefined during initial load
+
+## Component Naming & Organization
+
+### File Naming
+
+- PascalCase for component files: `ImagePreview.tsx`, `Webcam.tsx`
+- Lowercase for utility/hook files: `use-toast.ts`
+- Group related components in subdirectories
+
+### Project-Specific Components
+
+- **Webcam.tsx**: Handles camera capture, converts to base64
+- **ImagePreview.tsx**: Displays gallery with generation status, real-time updates
+- **ConvexShowcase.tsx**: Educational component demonstrating Convex features
+- **ConvexFloatingBubble.tsx**: Animated UI element with Convex branding
+
+## shadcn/ui Components (`/components/ui`)
+
+- Pre-built Radix UI primitives with Tailwind styling
+- DO NOT modify directly - copy/customize instead
+- Import from `@/components/ui/[component]`
+- Use `cn()` utility for className merging
+- Available: `Button`, `Card`, `Dialog`, `Avatar`, `Tabs`, `Progress`, `Carousel`, `Toaster`
+
+## Styling Rules
+
+### Tailwind CSS v4
+
+- Use utility classes directly
+- Responsive design: `sm:`, `md:`, `lg:` prefixes
+- Dark mode: `dark:bg-gray-900` for dark mode specific styles
+- Use `cn()` utility for conditional classes
+- Avoid inline styles
+
+### Class Variance Authority (CVA)
+
+```typescript
+const buttonVariants = cva("base-classes", {
+  variants: {
+    variant: {
+      default: "variant-classes",
+      destructive: "other-classes",
+    },
+  },
+});
+```
+
+## State Management
+
+### With Convex (Preferred)
+
+```typescript
+// Real-time data
+const images = useQuery(api.images.getImages) || [];
+
+// Mutations
+const createImage = useMutation(api.images.createImage);
+```
+
+### Local State
+
+- Use `useState` for UI-only state (modals, forms)
+- Use `useEffect` sparingly - prefer event handlers
+- Keep state as close to usage as possible
+
+## Performance & Optimization
+
+- Mark as `"use client"` only when needed
+- Server Components by default for better performance
+- Lazy load heavy components with `dynamic()`
+- Use Next.js `Image` component when possible
+- Handle loading states for better UX
+
+## Error Handling Pattern
+
+```typescript
+try {
+  await someAction();
+  toast.success("Success!");
+} catch (error) {
+  toast.error("Something went wrong");
+  console.error(error);
+}
+```
+
+## Common Patterns
+
+### File Upload
+
+```typescript
+const uploadUrl = await generateUploadUrl();
+const response = await fetch(uploadUrl, {
+  method: "POST",
+  body: file,
+});
+```
+
+### Status Checking
+
+```typescript
+const isProcessing = images.some(
+  (img) => img.generationStatus === "pending" || img.generationStatus === "processing"
+);
+```
+
+## IMPORTANT Rules
+
+- NEVER expose API keys in client code
+- Use server actions or API routes for sensitive operations
+- Keep components focused and composable
+- Handle loading and error states
+- Use TypeScript for all props
+- Semantic HTML and accessibility (ARIA labels, keyboard navigation)

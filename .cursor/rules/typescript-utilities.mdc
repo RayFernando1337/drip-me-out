@@ -1,0 +1,247 @@
+---
+globs: **/*.ts,**/*.tsx
+description: TypeScript conventions, utility patterns, and common helpers
+---
+
+# TypeScript & Utilities
+
+## TypeScript Configuration
+
+### Strict Mode & Path Aliases
+
+- Strict mode enabled across the project
+- Use path alias: `@/*` maps to project root
+- Configured in `tsconfig.json`
+
+### Import Patterns
+
+```typescript
+// Type imports from Convex generated types
+import { Doc, Id } from "@/convex/_generated/dataModel";
+import { api } from "@/convex/_generated/api";
+
+// Component imports
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+
+// Utility imports
+import { ComponentProps } from "react";
+```
+
+## Type Safety Patterns
+
+### Convex Document Types
+
+```typescript
+// Use generated types for type safety
+type ImageDoc = Doc<"images">;
+type ImageId = Id<"images">;
+
+// Function with proper typing
+export const getImage = query({
+  args: { imageId: v.id("images") },
+  returns: v.union(
+    v.object({
+      _id: v.id("images"),
+      _creationTime: v.number(),
+      generationStatus: v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed")
+      ),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const image: ImageDoc | null = await ctx.db.get(args.imageId);
+    return image;
+  },
+});
+```
+
+### Component Props Interfaces
+
+```typescript
+// Always define prop interfaces
+interface ImagePreviewProps {
+  images: Array<Doc<"images">>;
+  onImageSelect?: (imageId: Id<"images">) => void;
+  className?: string;
+}
+
+export function ImagePreview({ images, onImageSelect, className }: ImagePreviewProps) {
+  // Component implementation
+}
+```
+
+### Status Type Safety
+
+```typescript
+// Use literal unions for status tracking
+type GenerationStatus = "pending" | "processing" | "completed" | "failed";
+
+// Use as const for string literals
+const STATUSES = {
+  PENDING: "pending" as const,
+  PROCESSING: "processing" as const,
+  COMPLETED: "completed" as const,
+  FAILED: "failed" as const,
+} as const;
+```
+
+## Common Utility Patterns
+
+### Class Name Merging (`cn` utility)
+
+```typescript
+import { cn } from "@/lib/utils";
+
+// Conditional classes
+<div className={cn(
+  "base-classes",
+  isActive && "active-classes",
+  className
+)} />
+
+// Responsive classes
+<div className={cn(
+  "w-full",
+  "sm:w-1/2",
+  "lg:w-1/3"
+)} />
+```
+
+### Array and Record Type Definitions
+
+```typescript
+// Arrays - always specify type
+const imageIds: Array<Id<"images">> = [];
+const statuses: Array<GenerationStatus> = ["pending", "processing"];
+
+// Records - specify both key and value types
+const userLookup: Record<Id<"users">, string> = {};
+const statusCounts: Record<GenerationStatus, number> = {
+  pending: 0,
+  processing: 0,
+  completed: 0,
+  failed: 0,
+};
+```
+
+### Error Handling Types
+
+```typescript
+// Error boundary props
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ComponentType<{ error: Error }>;
+}
+
+// API error handling
+type ApiResult<T> =
+  | {
+      success: true;
+      data: T;
+    }
+  | {
+      success: false;
+      error: string;
+    };
+```
+
+## React Patterns
+
+### Component Type Definitions
+
+```typescript
+// For components that accept children
+interface WrapperProps {
+  children: React.ReactNode;
+  className?: string;
+}
+
+// For components extending HTML elements
+interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "default" | "destructive" | "outline";
+  size?: "sm" | "md" | "lg";
+}
+```
+
+### Hook Return Types
+
+```typescript
+// Custom hook with proper typing
+function useImageUpload() {
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const upload = useCallback(async (file: File): Promise<Id<"_storage">> => {
+    // Implementation
+  }, []);
+
+  return {
+    isUploading,
+    error,
+    upload,
+  } as const; // Use as const for return type inference
+}
+```
+
+## Validation Helpers
+
+### Input Validation
+
+```typescript
+// File validation
+function isValidImageFile(file: File): boolean {
+  const validTypes = ["image/jpeg", "image/png", "image/webp"];
+  const maxSize = 10 * 1024 * 1024; // 10MB
+
+  return validTypes.includes(file.type) && file.size <= maxSize;
+}
+
+// Status validation
+function isValidStatus(status: string): status is GenerationStatus {
+  return ["pending", "processing", "completed", "failed"].includes(status);
+}
+```
+
+## Common Type Guards
+
+```typescript
+// Check if value exists
+function isDefined<T>(value: T | undefined | null): value is T {
+  return value !== undefined && value !== null;
+}
+
+// Filter out undefined/null values
+const validImages = images.filter(isDefined);
+```
+
+## Performance Types
+
+### Memoization Patterns
+
+```typescript
+// Memoized component props
+interface MemoizedComponentProps {
+  readonly data: ReadonlyArray<Doc<"images">>;
+  readonly onSelect: (id: Id<"images">) => void;
+}
+
+// Use React.memo with proper typing
+const MemoizedComponent = React.memo<MemoizedComponentProps>(({ data, onSelect }) => {
+  // Component implementation
+});
+```
+
+## Important TypeScript Rules
+
+1. **Always** use interfaces for component props
+2. **Always** specify array types: `Array<Type>` not `Type[]`
+3. **Always** use `as const` for string literal objects
+4. **Always** type function parameters and return values
+5. **Never** use `any` - use `unknown` if needed
+6. **Use** union types for finite string sets (status, variants)
+7. **Import** types separately: `import type { ComponentProps } from "react"`

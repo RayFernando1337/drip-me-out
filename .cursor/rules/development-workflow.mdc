@@ -1,0 +1,126 @@
+---
+alwaysApply: true
+description: Development commands, workflow, and important deployment warnings
+---
+
+# Development Workflow
+
+## Package Manager
+
+This project uses **bun** as the package manager. Always use `bun` commands for dependency management and script execution.
+
+## Core Development Commands
+
+### Frontend Development
+
+```bash
+# Start development server with Turbopack
+bun run dev
+
+# Build the application
+bun run build
+
+# Start production server
+bun run start
+
+# Run linting
+bun run lint
+```
+
+### Convex Backend Development
+
+```bash
+# Start Convex development (watches for changes) - ALWAYS RUN THIS
+bunx convex dev
+
+# View logs
+bunx convex logs
+
+# Open dashboard
+bunx convex dashboard
+```
+
+## CRITICAL DEPLOYMENT WARNING
+
+**NEVER use `bunx convex deploy` - this deploys to production**
+
+- Only use `bunx convex dev` for development
+- Production deployments should be handled through proper CI/CD
+
+## Auto-restart Convex on Changes
+
+**IMPORTANT**: When making changes to files in the `/convex` directory, always run `bunx convex dev` in the background to:
+
+- Watch for errors
+- Validate TypeScript and schema changes
+- Ensure changes are properly synced
+- See function registration status
+
+## Development Workflow Best Practices
+
+### When Modifying Frontend (`/app`, `/components`)
+
+1. Start with `bun run dev`
+2. Check TypeScript: `bun run build`
+3. Test in browser at localhost:3000
+4. Verify Convex integration works
+5. Test responsive design
+
+### When Modifying Backend (`/convex`)
+
+1. **ALWAYS** run `bunx convex dev` in background
+2. Watch the output for:
+   - TypeScript errors
+   - Schema validation issues
+   - Function registration problems
+3. Test functions via dashboard or frontend
+4. Check logs with `bunx convex logs`
+
+### Testing UI Changes
+
+```bash
+bun run dev  # Development server on localhost:3000
+```
+
+### Environment Setup
+
+- Frontend env: `NEXT_PUBLIC_CONVEX_URL`
+- Backend env (via Convex dashboard): `GEMINI_API_KEY`
+
+## Common Development Issues
+
+### Convex Function Not Updating
+
+- Check `bunx convex dev` output for errors
+- Restart `bunx convex dev` if needed
+- Verify function syntax and validators
+
+### TypeScript Errors
+
+- Run `bun run build` to check for build errors
+- Check path aliases are working (`@/*`)
+- Verify Convex generated types are up to date
+
+### Real-time Updates Not Working
+
+- Confirm `bunx convex dev` is running
+- Check useQuery is returning data correctly
+- Verify function is registered as public (not internal)
+
+## File Watching Patterns
+
+- `bunx convex dev`: Watches `/convex` directory for backend changes
+- `bun run dev`: Watches frontend files with Turbopack hot reload
+
+## Performance Optimizations
+
+- Turbopack enabled (`--turbopack` flag in dev)
+- Minimize client bundle with server components
+- Lazy load heavy components with `dynamic()`
+
+## Important Notes
+
+- Never expose API keys in client code
+- Use server actions or API routes for sensitive operations
+- Keep Convex functions focused and properly validated
+- Always test both frontend and backend integration

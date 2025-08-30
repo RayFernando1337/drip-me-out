@@ -1,0 +1,64 @@
+---
+alwaysApply: true
+description: Main project overview and architecture for Drip Me Out AI image transformation app
+---
+
+# Drip Me Out - Project Overview
+
+## What This Project Is
+
+Drip Me Out is an AI-powered image transformation app that adds diamond chains to photos using Google's Gemini 2.5 Flash model. Built with Next.js 15 and powered by Convex's real-time backend platform.
+
+## Architecture Overview
+
+### Tech Stack
+
+- **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS v4
+- **UI Components**: shadcn/ui (Radix UI based)
+- **Backend**: Convex (real-time database, file storage, background jobs)
+- **AI Integration**: Google Gemini 2.5 Flash for image processing
+
+### Key Architectural Patterns
+
+1. **Real-Time Reactive Queries**: All data fetching uses Convex's `useQuery` hook which automatically updates when backend data changes
+2. **Background Job Processing**: AI image generation runs via Convex scheduler to keep the app responsive
+3. **File Storage**: Images are stored in Convex Storage with direct upload URLs
+4. **Type Safety**: End-to-end TypeScript with generated Convex client types in `convex/_generated/`
+
+### Directory Structure
+
+- `/app`: Next.js App Router pages and layouts - see [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- `/components`: React components including UI primitives in `/components/ui` - see [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- `/convex`: Backend functions (queries, mutations, actions, schema) - see [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+- `/lib`: Utility functions and shared helpers
+
+### Core Backend Functions
+
+- **images.ts**: CRUD operations for image records
+- **generate.ts**: AI image generation logic using Gemini API
+- **schema.ts**: Database schema definitions with indexes
+
+### Image Processing Flow
+
+1. User uploads/captures image → Stored in Convex Storage
+2. Database record created with `generationStatus: "pending"`
+3. Background job scheduled via `ctx.scheduler.runAfter()`
+4. AI processes image and updates status to "completed" or "failed"
+5. Frontend auto-updates via reactive queries
+
+### Status Tracking
+
+Images have `generationStatus` field that tracks: "pending" → "processing" → "completed"/"failed"
+
+### Path Aliases
+
+Uses `@/*` for imports (configured in tsconfig.json)
+
+### Environment Variables Required
+
+- `CONVEX_DEPLOYMENT`: Convex deployment URL
+- `GEMINI_API_KEY`: Google Gemini API key (set via Convex dashboard)
+
+## Package Manager
+
+This project uses **bun** as the package manager (evidenced by `bun.lock` file). Always use `bun` commands for dependency management and script execution.

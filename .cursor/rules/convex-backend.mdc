@@ -1,0 +1,273 @@
+---
+globs: convex/*.ts,convex/**/*.ts
+description: Convex backend conventions and patterns specific to this project
+---
+
+# Convex Backend Conventions
+
+## CRITICAL: Development Workflow
+
+**ALWAYS run `bunx convex dev` in background when modifying files in `/convex` directory**
+
+This watches for changes, validates functions, and syncs with the development environment. Check output for TypeScript errors, schema validation issues, and function registration problems.
+
+## Convex Function Syntax (REQUIRED)
+
+ALWAYS use the new function syntax with full validation:
+
+```typescript
+export const myFunction = query({
+  args: { name: v.string() },
+  returns: v.string(),
+  handler: async (ctx, args) => {
+    return "result";
+  },
+});
+```
+
+## Function Types & Security
+
+### Public Functions (External API)
+
+- `query`, `mutation`, `action` = Public API functions
+- Exposed to the public Internet
+- Use for client-facing operations
+
+### Private Functions (Internal Only)
+
+- `internalQuery`, `internalMutation`, `internalAction` = Private internal functions
+- Only callable by other Convex functions
+- **NEVER expose sensitive operations as public functions**
+
+## Validation Rules (MANDATORY)
+
+### Required Validators
+
+- ALWAYS include `args` and `returns` validators
+- Use `v.null()` for functions that return nothing
+- Use `v.id("tableName")` for document IDs
+- Use `v.int64()` not `v.bigint()` for 64-bit integers
+
+### Common Validator Patterns
+
+```typescript
+// Arrays
+args: {
+  items: v.array(v.string());
+}
+
+// Objects
+args: {
+  data: v.object({ field: v.string() });
+}
+
+// Unions
+args: {
+  value: v.union(v.string(), v.number());
+}
+
+// IDs
+args: {
+  imageId: v.id("images");
+}
+
+// Optional fields
+args: {
+  optional: v.optional(v.string());
+}
+```
+
+## Function Calling Patterns
+
+### Internal Function Calls
+
+```typescript
+// Use function references, NOT direct functions
+const result = await ctx.runQuery(api.images.getImage, { imageId });
+const result = await ctx.runMutation(internal.images.updateStatus, { imageId, status });
+
+// Add type annotations for same-file calls
+const result: string = await ctx.runQuery(api.example.myQuery, { name: "test" });
+```
+
+### External API Calls (Actions Only)
+
+```typescript
+"use node"; // Required for Node.js modules
+
+export const processImage = internalAction({
+  args: { imageId: v.id("images") },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    // External API calls here
+    // Use ctx.runQuery/ctx.runMutation for database access
+  },
+});
+```
+
+## Database Query Patterns
+
+### Index-Based Queries (REQUIRED)
+
+```typescript
+// NEVER use .filter() - define indexes instead
+const images = await ctx.db
+  .query("images")
+  .withIndex("by_user", (q) => q.eq("userId", userId))
+  .order("desc")
+  .collect();
+```
+
+### Single Document Retrieval
+
+```typescript
+// Use .unique() for single document (throws if multiple)
+const image = await ctx.db
+  .query("images")
+  .withIndex("by_id", (q) => q.eq("_id", imageId))
+  .unique();
+```
+
+### Deletion Pattern
+
+```typescript
+// Queries don't support .delete() - collect first
+const imagesToDelete = await ctx.db
+  .query("images")
+  .withIndex("by_status", (q) => q.eq("status", "failed"))
+  .collect();
+
+for (const image of imagesToDelete) {
+  await ctx.db.delete(image._id);
+}
+```
+
+## Schema Design Rules
+
+### Schema Definition (`schema.ts`)
+
+```typescript
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+
+export default defineSchema({
+  images: defineTable({
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    generationStatus: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["generationStatus"]),
+});
+```
+
+### Index Naming Convention
+
+- Include all fields: `by_user_and_status` for `["userId", "status"]`
+- Query fields in defined order
+- System fields automatically added: `_id`, `_creationTime`
+
+## Background Job Scheduling
+
+### Scheduling Pattern
+
+```typescript
+// Schedule immediate background processing
+await ctx.scheduler.runAfter(0, internal.generate.processImage, {
+  imageId: newImageId,
+});
+
+// Schedule delayed processing
+await ctx.scheduler.runAfter(60000, internal.cleanup.removeOldImages, {});
+```
+
+## File Storage Patterns
+
+### Upload URL Generation
+
+```typescript
+export const generateUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+```
+
+### File Access
+
+```typescript
+// Get signed URL
+const url = await ctx.storage.getUrl(storageId);
+
+// Get file metadata from _storage system table
+const metadata = await ctx.db.system.get(storageId);
+```
+
+## TypeScript Best Practices
+
+### Type-Safe IDs
+
+```typescript
+import { Id, Doc } from "../_generated/dataModel";
+
+export const getImage = query({
+  args: { imageId: v.id("images") },
+  returns: v.union(
+    v.object({
+      /* image shape */
+    }),
+    v.null()
+  ),
+  handler: async (ctx, args) => {
+    const imageId: Id<"images"> = args.imageId;
+    const image: Doc<"images"> | null = await ctx.db.get(imageId);
+    return image;
+  },
+});
+```
+
+### Array and Record Types
+
+```typescript
+// Arrays
+const items: Array<string> = ["item1", "item2"];
+
+// Records
+const lookup: Record<Id<"users">, string> = {};
+
+// Discriminated unions
+const status = "pending" as const;
+```
+
+## Project-Specific Implementation
+
+### Images Table Pattern
+
+- Track `generationStatus`: "pending" → "processing" → "completed"/"failed"
+- Store `storageId` for file references
+- Index by `userId` for user queries
+
+### AI Processing Flow
+
+1. Create image record with `generationStatus: "pending"`
+2. Schedule background job: `ctx.scheduler.runAfter(0, internal.generate.processImage, {...})`
+3. Update status to "processing" in action
+4. Call external AI API
+5. Update status to "completed"/"failed"
+
+## Environment Variables
+
+Set via Convex dashboard (NOT in code):
+
+- `GEMINI_API_KEY`: Google Gemini API key
+
+## Reference to Comprehensive Rules
+
+For additional Convex best practices, guidelines, and examples, refer to the `convex_rules` which contains extensive patterns for database design, validators, function calling, and real-world examples.

@@ -1,0 +1,257 @@
+---
+description: Domain-specific patterns for Drip Me Out AI diamond chain transformation
+---
+
+# Drip Me Out - Domain-Specific Patterns
+
+## What This App Does
+
+Drip Me Out adds **diamond chains** to photos using Google's Gemini 2.5 Flash model. Users can upload photos or use their camera to capture images, then AI automatically adds realistic diamond jewelry overlays.
+
+## Core User Journey
+
+1. **Capture/Upload** → User takes photo with camera or uploads existing image
+2. **Processing** → AI analyzes image and adds diamond chains
+3. **Preview** → User sees original vs transformed image
+4. **Status Tracking** → Real-time updates show processing progress
+
+## Image Processing Pipeline
+
+### Status Flow
+
+```typescript
+type GenerationStatus =
+  | "pending" // Just uploaded, queued for processing
+  | "processing" // Currently being processed by AI
+  | "completed" // Successfully transformed with diamond chains
+  | "failed"; // Processing failed, show error state
+```
+
+### Processing Architecture
+
+```typescript
+// 1. Create image record
+const imageId = await ctx.db.insert("images", {
+  userId,
+  storageId,
+  generationStatus: "pending",
+});
+
+// 2. Schedule AI processing
+await ctx.scheduler.runAfter(0, internal.generate.processImage, {
+  imageId,
+});
+
+// 3. AI action processes image
+export const processImage = internalAction({
+  handler: async (ctx, args) => {
+    // Update to processing
+    await ctx.runMutation(internal.images.updateStatus, {
+      imageId: args.imageId,
+      status: "processing",
+    });
+
+    // Call Gemini API with diamond chain prompt
+    // Update to completed/failed based on result
+  },
+});
+```
+
+## Camera Integration Patterns
+
+### Webcam Component Features
+
+- **Permission Handling**: Request camera permissions gracefully
+- **Photo Capture**: Convert camera stream to base64 image data
+- **Error States**: Handle permission denied, no camera, etc.
+- **Mobile Responsive**: Works on both desktop and mobile cameras
+
+```typescript
+// Camera capture pattern
+const capturePhoto = useCallback(() => {
+  if (videoRef.current) {
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+
+    context?.drawImage(videoRef.current, 0, 0);
+
+    // Convert to base64 for AI processing
+    const base64 = canvas.toDataURL("image/jpeg", 0.8);
+    return base64;
+  }
+}, []);
+```
+
+## AI Integration Patterns
+
+### Gemini API Integration
+
+- **Model**: Uses `gemini-2.5-flash` for image analysis and transformation
+- **Prompt Engineering**: Specialized prompts for diamond chain addition
+- **Image Processing**: Handles base64 input/output for image transformations
+- **Error Handling**: Graceful degradation when AI fails
+
+### Processing Prompt Pattern
+
+```typescript
+const prompt = `
+Add realistic diamond chains to this person in the photo. 
+Make the diamonds sparkle and look expensive. 
+Ensure the chains look natural and properly positioned.
+Maintain the original photo quality and lighting.
+`;
+```
+
+## Real-Time UI Patterns
+
+### Status-Based Rendering
+
+```typescript
+function ImageCard({ image }: { image: Doc<"images"> }) {
+  const isProcessing = image.generationStatus === "pending" ||
+                      image.generationStatus === "processing";
+
+  return (
+    <div className="relative">
+      {isProcessing && <LoadingOverlay />}
+      {image.generationStatus === "failed" && <ErrorState />}
+      {image.generationStatus === "completed" && <CompletedImage />}
+    </div>
+  );
+}
+```
+
+### Loading States
+
+```typescript
+// Check if any images are processing
+const hasProcessingImages = images.some(
+  img => img.generationStatus === 'pending' ||
+         img.generationStatus === 'processing'
+);
+
+// Disable upload during processing
+<Button disabled={hasProcessingImages}>
+  {hasProcessingImages ? "Processing..." : "Upload Photo"}
+</Button>
+```
+
+## File Upload Patterns
+
+### Image Upload Flow
+
+```typescript
+const uploadImage = async (file: File) => {
+  // 1. Get upload URL from Convex
+  const uploadUrl = await generateUploadUrl();
+
+  // 2. Upload to Convex Storage
+  const response = await fetch(uploadUrl, {
+    method: "POST",
+    body: file,
+  });
+
+  const { storageId } = await response.json();
+
+  // 3. Create database record
+  await createImage({
+    storageId,
+    generationStatus: "pending" as const,
+  });
+};
+```
+
+### File Validation
+
+```typescript
+const isValidImageFile = (file: File): boolean => {
+  const validTypes = ["image/jpeg", "image/png", "image/webp"];
+  const maxSize = 10 * 1024 * 1024; // 10MB
+
+  return validTypes.includes(file.type) && file.size <= maxSize;
+};
+```
+
+## UI/UX Patterns
+
+### Image Gallery Display
+
+- **Grid Layout**: Responsive grid showing original → transformed
+- **Status Indicators**: Visual feedback for processing state
+- **Error Recovery**: Retry buttons for failed transformations
+- **Loading Animations**: Shimmer effects during processing
+
+### Mobile-First Design
+
+- **Touch-Friendly**: Large tap targets for camera and upload
+- **Responsive Images**: Optimized display across screen sizes
+- **Performance**: Lazy loading for image galleries
+
+## Error Handling Patterns
+
+### Processing Failures
+
+```typescript
+// Handle AI processing failures gracefully
+if (image.generationStatus === "failed") {
+  return (
+    <div className="text-red-500">
+      <p>Transformation failed</p>
+      <Button onClick={() => retryProcessing(image._id)}>
+        Try Again
+      </Button>
+    </div>
+  );
+}
+```
+
+### Camera Errors
+
+```typescript
+const handleCameraError = (error: Error) => {
+  if (error.name === "NotAllowedError") {
+    setError("Camera permission denied");
+  } else if (error.name === "NotFoundError") {
+    setError("No camera found");
+  } else {
+    setError("Camera error occurred");
+  }
+};
+```
+
+## Performance Considerations
+
+### Image Optimization
+
+- **Compression**: JPEG at 80% quality for uploads
+- **Size Limits**: 10MB max file size
+- **Format Support**: JPEG, PNG, WebP accepted
+- **Base64 Conversion**: Only for AI processing, not storage
+
+### Background Processing
+
+- **Non-Blocking**: UI remains responsive during AI processing
+- **Queue Management**: Multiple images can be processed concurrently
+- **Progress Feedback**: Real-time status updates via Convex reactivity
+
+## Domain-Specific Constants
+
+```typescript
+// Processing timeouts
+const AI_PROCESSING_TIMEOUT = 60 * 1000; // 1 minute
+
+// Image constraints
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024; // 10MB
+const SUPPORTED_FORMATS = ["image/jpeg", "image/png", "image/webp"];
+
+// Status display messages
+const STATUS_MESSAGES = {
+  pending: "Queued for processing...",
+  processing: "Adding diamond chains...",
+  completed: "Transformation complete!",
+  failed: "Processing failed - please try again",
+} as const;
+```
