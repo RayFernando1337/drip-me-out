@@ -5,6 +5,15 @@ description: Frontend conventions for Next.js 15 App Router and React components
 
 # Frontend Conventions
 
+## Reference Docs
+- Root: [CLAUDE.md](mdc:CLAUDE.md)
+- Frontend: [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- Components: [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- Backend: [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+
+## Tooling
+- Use bun for scripts (`bun run dev`) and bunx for Convex (`bunx convex dev`).
+
 ## Next.js 15 App Router Conventions
 
 ### File Structure in `/app`

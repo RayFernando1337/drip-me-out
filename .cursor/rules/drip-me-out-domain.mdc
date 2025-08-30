@@ -4,6 +4,15 @@ description: Domain-specific patterns for Drip Me Out AI diamond chain transform
 
 # Drip Me Out - Domain-Specific Patterns
 
+## Reference Docs
+- Root: [CLAUDE.md](mdc:CLAUDE.md)
+- Frontend: [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- Components: [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- Backend: [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+
+## Tooling
+- Use bun/bunx commands, not npm/npx.
+
 ## What This App Does
 
 Drip Me Out adds **diamond chains** to photos using Google's Gemini 2.5 Flash model. Users can upload photos or use their camera to capture images, then AI automatically adds realistic diamond jewelry overlays.

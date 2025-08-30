@@ -11,6 +11,12 @@ Drip Me Out is an AI-powered image transformation app that adds diamond chains t
 
 ## Architecture Overview
 
+## Reference Docs
+- Root: [CLAUDE.md](mdc:CLAUDE.md)
+- Frontend: [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- Components: [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- Backend: [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+
 ### Tech Stack
 
 - **Frontend**: Next.js 15 with App Router, TypeScript, Tailwind CSS v4

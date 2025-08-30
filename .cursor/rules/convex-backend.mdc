@@ -5,6 +5,15 @@ description: Convex backend conventions and patterns specific to this project
 
 # Convex Backend Conventions
 
+## Reference Docs
+- Root: [CLAUDE.md](mdc:CLAUDE.md)
+- Frontend: [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- Components: [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- Backend: [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+
+## Tooling
+- Use bun for scripts and bunx for Convex CLI.
+
 ## CRITICAL: Development Workflow
 
 **ALWAYS run `bunx convex dev` in background when modifying files in `/convex` directory**

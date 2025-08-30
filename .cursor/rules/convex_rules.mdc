@@ -4,6 +4,16 @@ globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
 ---
 
 # Convex guidelines
+
+## Reference Docs
+- Root: [CLAUDE.md](mdc:CLAUDE.md)
+- Frontend: [app/CLAUDE.md](mdc:app/CLAUDE.md)
+- Components: [components/CLAUDE.md](mdc:components/CLAUDE.md)
+- Backend: [convex/CLAUDE.md](mdc:convex/CLAUDE.md)
+
+## Tooling
+- Use bun for scripts: `bun run dev`, `bun run build`, `bun run lint`.
+- Use bunx for Convex: `bunx convex dev`, `bunx convex logs`, `bunx convex dashboard`.
 ## Function guidelines
 ### New function syntax
 - ALWAYS use the new function syntax for Convex functions. For example:
@@ -673,4 +683,3 @@ export default function App() {
   return <div>Hello World</div>;
 }
 ```
-
