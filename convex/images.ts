@@ -38,3 +38,29 @@ export const getImages = query({
     return imagesWithUrls;
   },
 });
+
+export const getImageById = query({
+  args: { imageId: v.id("images") },
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) return null;
+    
+    // For now, all images are shareable until Phase 4 adds privacy settings
+    // Check if sharing is enabled (will be added in Phase 4)
+    // const sharingEnabled = image.sharingEnabled !== false;
+    // if (!sharingEnabled) return null;
+    
+    // Check expiration (will be added in Phase 4)
+    // if (image.shareExpiresAt && image.shareExpiresAt < Date.now()) {
+    //   return null;
+    // }
+    
+    const url = await ctx.storage.getUrl(image.body);
+    if (!url) return null;
+    
+    return {
+      ...image,
+      url,
+    };
+  },
+});

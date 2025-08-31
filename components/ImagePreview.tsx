@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import { Button } from "./ui/button";
+import ImageModal from "./ImageModal";
 
 
 
@@ -30,6 +34,8 @@ export default function ImagePreview({
   hasMore = false,
   isLoading = false
 }: ImagePreviewProps) {
+  const [selectedImage, setSelectedImage] = useState<UploadedImage | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   // Only show uploaded images (captured images are now uploaded automatically)
   const allImages = uploadedImages.map((img, index) => ({
     type: 'uploaded' as const,
@@ -64,7 +70,14 @@ export default function ImagePreview({
       {/* 3-Column Grid Layout */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {allImages.map((image) => (
-          <div key={`${image.type}-${image.index}`} className="group">
+          <div 
+            key={`${image.type}-${image.index}`} 
+            className="group cursor-pointer"
+            onClick={() => {
+              setSelectedImage(image.data);
+              setIsModalOpen(true);
+            }}
+          >
             <div className="bg-card border-border hover:border-accent transition-colors overflow-hidden rounded-lg">
               <div className="aspect-square relative">
                 <img
@@ -127,6 +140,15 @@ export default function ImagePreview({
           </Button>
         </div>
       )}
+
+      <ImageModal
+        image={selectedImage}
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedImage(null);
+        }}
+      />
     </div>
   )
 }
