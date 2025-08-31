@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Copy, Check } from "lucide-react";
+import { X, Copy, Check, Twitter, Share2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ImageModalProps {
@@ -32,6 +32,30 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast.error("Failed to copy link");
+    }
+  };
+
+  const handleTwitterShare = () => {
+    const shareUrl = `${window.location.origin}/share/${image._id}`;
+    const text = "Check out my AI-generated diamond chain photo! 💎⛓️";
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(twitterUrl, "_blank");
+  };
+
+  const handleNativeShare = async () => {
+    const shareUrl = `${window.location.origin}/share/${image._id}`;
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: "My Dripped Out Photo",
+          text: "Check out my AI-generated diamond chain!",
+          url: shareUrl,
+        });
+      } catch (err) {
+        // User cancelled or error - do nothing
+        console.log("Share cancelled");
+      }
     }
   };
 
@@ -68,6 +92,24 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copied ? "Copied!" : "Copy Share Link"}
             </Button>
+            <Button 
+              onClick={handleTwitterShare} 
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Twitter className="w-4 h-4" />
+              Share on X
+            </Button>
+            {typeof navigator !== "undefined" && "share" in navigator && (
+              <Button 
+                onClick={handleNativeShare} 
+                variant="outline"
+                className="flex items-center gap-2"
+              >
+                <Share2 className="w-4 h-4" />
+                Share
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
