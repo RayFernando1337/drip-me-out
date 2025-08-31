@@ -85,3 +85,21 @@ When making changes to files in the `/convex` directory, always run `bunx convex
 4. **Environment Variables Required**:
    - `CONVEX_DEPLOYMENT`: Convex deployment URL
    - `GEMINI_API_KEY`: Google Gemini API key (set via Convex dashboard)
+
+## Feature Specifications
+
+### Image Sharing Feature (In Development)
+A comprehensive technical specification for implementing image sharing functionality is available at:
+`/documentation/image-sharing-feature-spec.md`
+
+This specification includes:
+- Phase 1: Image Modal for viewing individual images
+- Phase 2: URL generation and public share routes (`/share/[imageId]`)
+- Phase 3: Social sharing (Twitter/X, native mobile)
+- Phase 4: Privacy settings and link expiration
+
+Key implementation details:
+- Uses shadcn/ui components (install with `bunx shadcn@latest add [component]`)
+- Leverages Convex real-time queries for instant updates
+- Each phase is independently verifiable with specific test criteria
+- Follows all existing CLAUDE.md patterns and conventions

@@ -100,8 +100,47 @@ export const listItems = query({
 Set via Convex dashboard:
 - `GEMINI_API_KEY`: Google Gemini API key
 
+## Image Sharing Feature Functions (In Development)
+See `/documentation/image-sharing-feature-spec.md` for complete implementation details.
+
+### New Functions to be Added to images.ts:
+
+#### getImageById (Phase 2)
+```typescript
+export const getImageById = query({
+  args: { imageId: v.id("images") },
+  handler: async (ctx, args) => {
+    // Check sharing permissions and expiration
+    // Return image with signed URL or null
+  },
+});
+```
+
+#### updateShareSettings (Phase 4)
+```typescript
+export const updateShareSettings = mutation({
+  args: {
+    imageId: v.id("images"),
+    sharingEnabled: v.boolean(),
+    expirationHours: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    // Update sharing settings and expiration
+  },
+});
+```
+
+### Schema Updates Required (Phase 4):
+Add to images table:
+- `sharingEnabled: v.optional(v.boolean())`
+- `shareExpiresAt: v.optional(v.number())`
+- New index: `by_sharing_enabled`
+
+**Important:** Run `bunx convex dev` after schema changes to sync.
+
 ## Testing Changes
 After modifying Convex functions, check the `bunx convex dev` output for:
 - TypeScript errors
 - Schema validation issues
 - Function registration problems
+- Refer to `/documentation/image-sharing-feature-spec.md` for implementation phases

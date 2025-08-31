@@ -145,9 +145,35 @@ When modifying components:
 3. Verify Convex integration works
 4. Test responsive design
 
+## Image Sharing Feature Components (In Development)
+See `/documentation/image-sharing-feature-spec.md` for complete implementation details.
+
+### New Components to be Added:
+
+#### ImageModal.tsx (Phase 1)
+- Full-screen modal for viewing individual images
+- Uses shadcn/ui Dialog component (already installed)
+- Features: Copy share link, social sharing, privacy settings
+- Props: `image`, `isOpen`, `onClose`
+- Implements keyboard navigation (ESC to close)
+
+### Component Installation:
+```bash
+# Install any missing shadcn/ui components
+bunx shadcn@latest add dialog   # Should already be installed
+bunx shadcn@latest add switch   # For privacy toggles (Phase 4)
+bunx shadcn@latest add select   # Should already be installed
+```
+
+### Modified Components:
+- **ImagePreview.tsx**: Add click handler to open ImageModal (lines 66-108)
+- Add state management for selected image
+- Pass image data to modal component
+
 ## IMPORTANT Component Rules
 - NEVER add API keys or secrets to components
 - Keep components focused on single responsibility
 - Use TypeScript for all props
 - Handle loading and error states
 - Make components reusable when possible
+- Refer to `/documentation/image-sharing-feature-spec.md` for implementation details
