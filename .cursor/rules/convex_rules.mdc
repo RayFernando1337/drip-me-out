@@ -4,6 +4,53 @@ globs: **/*.ts,**/*.tsx,**/*.js,**/*.jsx
 ---
 
 # Convex guidelines
+
+## ⚠️ CRITICAL TYPE SAFETY RULES - READ FIRST
+
+### NEVER Create Manual Type Compositions
+```typescript
+// ❌ WRONG - Violates Convex patterns
+type ImageWithUrl = Doc<"images"> & { url: string };
+const images = useQuery(api.images.getImages) || [];
+
+// ✅ CORRECT - Use type inference
+const imagesData = useQuery(api.images.getImages);
+const images = useMemo(() => imagesData || [], [imagesData]);
+
+// For individual items
+type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
+
+// For arrays
+const [items, setItems] = useState<typeof images>([]);
+```
+
+### ALWAYS Include Return Validators
+```typescript
+// ❌ WRONG - Missing returns validator
+export const getImages = query({
+  args: {},
+  handler: async (ctx) => { /* ... */ }
+});
+
+// ✅ CORRECT - Include returns validator
+export const getImages = query({
+  args: {},
+  returns: v.array(v.object({
+    _id: v.id("images"),
+    url: v.string(),
+    // ... all fields
+  })),
+  handler: async (ctx) => { /* ... */ }
+});
+```
+
+### Type Predicates for Filtering
+```typescript
+// ✅ Use type predicates when filtering nullable values
+return imagesWithUrls.filter(
+  (image): image is typeof image & { url: string } => image.url !== null
+);
+```
 ## Function guidelines
 ### New function syntax
 - ALWAYS use the new function syntax for Convex functions. For example:

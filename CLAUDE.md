@@ -86,6 +86,77 @@ When making changes to files in the `/convex` directory, always run `bunx convex
    - `CONVEX_DEPLOYMENT`: Convex deployment URL
    - `GEMINI_API_KEY`: Google Gemini API key (set via Convex dashboard)
 
+## Critical Type Safety Rules for Convex
+
+### ⚠️ NEVER Create Manual Type Compositions
+**WRONG:**
+```typescript
+// ❌ Never do this - violates Convex patterns
+type ImageWithUrl = Doc<"images"> & { url: string };
+```
+
+**CORRECT:**
+```typescript
+// ✅ Use type inference from query return types
+type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
+
+// ✅ Or let TypeScript infer inline
+const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
+```
+
+### Query Result Handling
+**WRONG:**
+```typescript
+// ❌ This causes React hook dependency warnings
+const images = useQuery(api.images.getImages) || [];
+```
+
+**CORRECT:**
+```typescript
+// ✅ Use useMemo for stable references
+const imagesData = useQuery(api.images.getImages);
+const images = useMemo(() => imagesData || [], [imagesData]);
+```
+
+### ID Type Safety
+**ALWAYS** use `Id<"tableName">` for document IDs:
+```typescript
+// ✅ Correct ID typing
+import { Id } from "@/convex/_generated/dataModel";
+
+interface Props {
+  imageId: Id<"images">;  // Never use string
+}
+
+// ✅ Cast URL params to Id types
+const { imageId } = await params;
+return <Component imageId={imageId as Id<"images">} />;
+```
+
+### Backend Return Validators
+**ALWAYS** include return validators in Convex functions:
+```typescript
+// ✅ Every function must have returns validator
+export const getImages = query({
+  args: {},
+  returns: v.array(v.object({
+    _id: v.id("images"),
+    url: v.string(),
+    // ... other fields
+  })),
+  handler: async (ctx) => { /* ... */ }
+});
+```
+
+### Type Predicate for Filtering
+When filtering arrays with nullable values:
+```typescript
+// ✅ Use type predicates for proper type narrowing
+return imagesWithUrls.filter(
+  (image): image is typeof image & { url: string } => image.url !== null
+);
+```
+
 ## Documentation Structure
 
 Project documentation follows a standardized structure in `/documentation/`:

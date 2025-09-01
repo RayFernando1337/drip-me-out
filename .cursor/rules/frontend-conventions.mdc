@@ -53,19 +53,40 @@ export function MyComponent({ prop1, prop2 }: MyComponentProps) {
 
 ## Convex Integration Patterns
 
-### Client Components with Convex
+### ⚠️ CRITICAL: Type-Safe Query Patterns
 
+**❌ WRONG - Creates unstable references:**
+```typescript
+const data = useQuery(api.images.getImages) || [];
+type CustomType = Doc<"images"> & { url: string };  // Never do this!
+```
+
+**✅ CORRECT - Use type inference:**
 ```typescript
 "use client";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useMemo, useState } from "react";
+import { Id } from "@/convex/_generated/dataModel";
 
 export default function Component() {
-  const data = useQuery(api.images.getImages) || [];
-  const mutate = useMutation(api.images.createImage);
-
-  const handleSubmit = async () => {
-    await mutate({ data: "..." });
+  // Stable query result handling
+  const imagesData = useQuery(api.images.getImages);
+  const images = useMemo(() => imagesData || [], [imagesData]);
+  
+  // Type inference from query
+  const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
+  
+  // For individual items
+  type ImageFromQuery = NonNullable<
+    ReturnType<typeof useQuery<typeof api.images.getImages>>
+  >[number];
+  
+  // Mutations with proper ID types
+  const mutate = useMutation(api.images.updateShareSettings);
+  
+  const handleSubmit = async (imageId: Id<"images">) => {
+    await mutate({ imageId, sharingEnabled: true });
   };
 }
 ```
@@ -74,8 +95,8 @@ export default function Component() {
 
 - `useQuery` hooks automatically re-render on data changes
 - No need for manual refresh or polling
-- Always provide fallback: `const data = useQuery(api.endpoint) || []`
-- Handle undefined during initial load
+- **ALWAYS use `useMemo`** for stable references to avoid React warnings
+- Handle undefined during initial load with `useMemo(() => data || [], [data])`
 
 ## Component Naming & Organization
 

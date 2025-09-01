@@ -6,15 +6,41 @@ This file provides Convex-specific guidance for Claude Code when working in the 
 
 ## Convex Function Syntax
 
-ALWAYS use the new function syntax with validators:
+⚠️ **CRITICAL: ALWAYS include both args AND returns validators**
+
 ```typescript
 export const myFunction = query({
   args: { name: v.string() },
-  returns: v.string(),
+  returns: v.string(),  // ✅ NEVER omit this!
   handler: async (ctx, args) => {
     return "result";
   },
 });
+```
+
+### Return Validator Examples
+```typescript
+// ✅ Array of objects with all fields defined
+returns: v.array(
+  v.object({
+    _id: v.id("images"),
+    _creationTime: v.number(),
+    url: v.string(),
+    body: v.string(),
+    // ... define ALL fields
+  })
+)
+
+// ✅ Union for nullable returns
+returns: v.union(
+  v.object({ /* ... */ }),
+  v.null()
+)
+
+// ✅ Simple types
+returns: v.string()
+returns: v.id("images")
+returns: v.null()  // for void functions
 ```
 
 ## Key Convex Rules
@@ -65,6 +91,25 @@ export const myFunction = query({
 - Use `Doc<"tableName">` for document types
 - Add `as const` for string literals in discriminated unions
 - Define arrays as `const array: Array<T> = [...];`
+
+### Type Predicates for Filtering
+When filtering arrays with nullable values, use type predicates:
+```typescript
+// ✅ Correct - Type predicate for proper type narrowing
+const imagesWithUrls = await Promise.all(
+  images.map(async (image) => ({
+    ...image,
+    url: await ctx.storage.getUrl(image.body),
+  }))
+);
+
+return imagesWithUrls.filter(
+  (image): image is typeof image & { url: string } => image.url !== null
+);
+
+// ❌ Wrong - Without type predicate
+return imagesWithUrls.filter(image => image.url !== null);
+```
 
 ## Common Patterns
 

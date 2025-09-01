@@ -10,16 +10,35 @@ This file provides component-specific guidance for Claude Code when working in t
 - Group related components in subdirectories
 
 ### Component Structure
+
+⚠️ **CRITICAL: Type Safety with Convex**
+
+**❌ NEVER define manual types for Convex data:**
+```typescript
+// WRONG - Don't create manual type compositions
+interface ImagePreviewProps {
+  images: (Doc<"images"> & { url: string })[];  // ❌ Never do this
+}
+```
+
+**✅ ALWAYS use type inference:**
 ```typescript
 "use client";  // Only if using hooks or browser APIs
 
-import { ComponentProps } from "react";
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
 
-interface MyComponentProps {
-  // Define props with TypeScript interfaces
+// Infer types from Convex queries
+type ImageFromQuery = NonNullable<
+  ReturnType<typeof useQuery<typeof api.images.getImages>>
+>[number];
+
+interface ImagePreviewProps {
+  images?: ImageFromQuery[];  // ✅ Use inferred types
+  onLoadMore?: () => void;
 }
 
-export function MyComponent({ prop1, prop2 }: MyComponentProps) {
+export function ImagePreview({ images = [], onLoadMore }: ImagePreviewProps) {
   // Component logic
   return <div>...</div>;
 }
@@ -58,22 +77,39 @@ export function MyComponent({ prop1, prop2 }: MyComponentProps) {
 
 ## State Management Patterns
 
-### With Convex
+### With Convex - Type-Safe Patterns
+
+**❌ WRONG Pattern:**
+```typescript
+// Creates unstable reference, causes React warnings
+const images = useQuery(api.images.getImages) || [];
+```
+
+**✅ CORRECT Pattern:**
 ```typescript
 "use client";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useMemo, useState } from "react";
+import { Id } from "@/convex/_generated/dataModel";
 
 export function Component() {
-  // Real-time data
-  const images = useQuery(api.images.getImages) || [];
+  // Stable real-time data reference
+  const imagesData = useQuery(api.images.getImages);
+  const images = useMemo(() => imagesData || [], [imagesData]);
   
-  // Mutations
-  const createImage = useMutation(api.images.createImage);
+  // Type-safe local state
+  const [selectedImage, setSelectedImage] = useState<typeof images[number] | null>(null);
   
-  // Handle actions
-  const handleSubmit = async () => {
-    await createImage({ data: "..." });
+  // Mutations with proper ID types
+  const updateSettings = useMutation(api.images.updateShareSettings);
+  
+  // Handle actions with ID type safety
+  const handleUpdate = async (imageId: Id<"images">) => {
+    await updateSettings({ 
+      imageId,  // Type-safe ID
+      sharingEnabled: true 
+    });
   };
 }
 ```

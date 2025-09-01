@@ -39,45 +39,60 @@ import { ComponentProps } from "react";
 
 ## Type Safety Patterns
 
-### Convex Document Types
+### ⚠️ CRITICAL: Type Inference Over Manual Types
+
+**❌ NEVER create manual type compositions:**
+```typescript
+// WRONG - Violates Convex patterns
+type ImageWithUrl = Doc<"images"> & { url: string };
+interface Props {
+  images: Array<Doc<"images"> & { url: string }>;
+}
+```
+
+**✅ ALWAYS use type inference:**
+```typescript
+// CORRECT - Infer from query return types
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+// For array elements
+type ImageFromQuery = NonNullable<
+  ReturnType<typeof useQuery<typeof api.images.getImages>>
+>[number];
+
+// For arrays
+const [items, setItems] = useState<typeof images>([]);
+
+// Component props with inferred types
+interface ImagePreviewProps {
+  images?: ImageFromQuery[];
+  onImageSelect?: (imageId: Id<"images">) => void;
+}
+```
+
+### Convex Function Types
 
 ```typescript
-// Use generated types for type safety
-type ImageDoc = Doc<"images">;
-type ImageId = Id<"images">;
-
-// Function with proper typing
+// ALWAYS include return validators
 export const getImage = query({
   args: { imageId: v.id("images") },
-  returns: v.union(
+  returns: v.union(  // ✅ Never omit returns
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      generationStatus: v.union(
-        v.literal("pending"),
-        v.literal("processing"),
-        v.literal("completed"),
-        v.literal("failed")
-      ),
+      url: v.string(),
+      // Define ALL fields
     }),
     v.null()
   ),
   handler: async (ctx, args) => {
-    const image: ImageDoc | null = await ctx.db.get(args.imageId);
-    return image;
+    // Type predicates for filtering
+    return results.filter(
+      (item): item is typeof item & { url: string } => item.url !== null
+    );
   },
 });
-```
-
-### Component Props Interfaces
-
-```typescript
-// Always define prop interfaces
-interface ImagePreviewProps {
-  images: Array<Doc<"images">>;
-  onImageSelect?: (imageId: Id<"images">) => void;
-  className?: string;
-}
 
 export function ImagePreview({ images, onImageSelect, className }: ImagePreviewProps) {
   // Component implementation

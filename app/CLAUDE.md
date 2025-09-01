@@ -19,23 +19,57 @@ This file provides Next.js App Router specific guidance for Claude Code when wor
 
 ## Convex Integration with Next.js
 
-### Client Components with Convex
+### ⚠️ CRITICAL: Type-Safe Query Patterns
+
+**❌ NEVER do this:**
+```typescript
+// Wrong - creates unstable references
+const images = useQuery(api.images.getImages) || [];
+
+// Wrong - manual type composition
+type ImageWithUrl = Doc<"images"> & { url: string };
+```
+
+**✅ ALWAYS do this:**
 ```typescript
 "use client";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { useMemo } from "react";
 
 export default function Component() {
-  const data = useQuery(api.images.getImages);
+  // Stable query result handling
+  const imagesData = useQuery(api.images.getImages);
+  const images = useMemo(() => imagesData || [], [imagesData]);
+  
+  // Type inference from query
+  const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
+  
+  // Mutations
   const mutate = useMutation(api.images.createImage);
-  // ...
 }
+```
+
+### Type Inference Patterns
+```typescript
+// ✅ Infer types from query return values
+type ImageFromQuery = NonNullable<
+  ReturnType<typeof useQuery<typeof api.images.getImages>>
+>[number];
+
+// ✅ Use typeof for array types
+const [items, setItems] = useState<typeof images>([]);
+
+// ✅ Cast URL params to Id types
+import { Id } from "@/convex/_generated/dataModel";
+const { imageId } = await params;
+return <Component imageId={imageId as Id<"images">} />;
 ```
 
 ### Real-Time Updates
 - `useQuery` hooks automatically re-render on data changes
 - No need for manual refresh or polling
-- Check for undefined during initial load: `const data = useQuery(api.endpoint) || []`
+- Use `useMemo` for stable references to avoid React warnings
 
 ## Project-Specific Patterns
 
