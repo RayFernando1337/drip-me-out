@@ -93,21 +93,9 @@ const isProcessing = images.some(
 );
 ```
 
-## Image Sharing Feature (In Development)
-See `/documentation/image-sharing-feature-spec.md` for complete implementation details.
-
-### New Routes to be Added:
-- `/share/[imageId]/page.tsx` - Public share page (server component)
-- `/share/[imageId]/client.tsx` - Client component for share page
-
-### Key Implementation Notes:
-- Use `preloadQuery` from `convex/nextjs` for SEO-friendly share pages
-- Implement Open Graph metadata in `generateMetadata` function
-- Share pages should work without authentication
-- Follow the specification phases for sequential implementation
-
 ## IMPORTANT
 - Never expose API keys in client code
 - Use server actions or API routes for sensitive operations
 - Keep components focused and composable
-- Refer to `/documentation/image-sharing-feature-spec.md` for feature implementations
+- Check `/documentation/features/active/` for current feature work
+- Reference `/documentation/features/completed/` for implementation patterns

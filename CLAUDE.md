@@ -86,20 +86,20 @@ When making changes to files in the `/convex` directory, always run `bunx convex
    - `CONVEX_DEPLOYMENT`: Convex deployment URL
    - `GEMINI_API_KEY`: Google Gemini API key (set via Convex dashboard)
 
-## Feature Specifications
+## Documentation Structure
 
-### Image Sharing Feature (In Development)
-A comprehensive technical specification for implementing image sharing functionality is available at:
-`/documentation/image-sharing-feature-spec.md`
+Project documentation follows a standardized structure in `/documentation/`:
 
-This specification includes:
-- Phase 1: Image Modal for viewing individual images
-- Phase 2: URL generation and public share routes (`/share/[imageId]`)
-- Phase 3: Social sharing (Twitter/X, native mobile)
-- Phase 4: Privacy settings and link expiration
+### Feature Documentation
+- **Active Features**: `/documentation/features/active/` - Currently in development
+- **Completed Features**: `/documentation/features/completed/` - Shipped features
+- **Planned Features**: `/documentation/features/planned/` - Future roadmap
 
-Key implementation details:
-- Uses shadcn/ui components (install with `bunx shadcn@latest add [component]`)
-- Leverages Convex real-time queries for instant updates
-- Each phase is independently verifiable with specific test criteria
-- Follows all existing CLAUDE.md patterns and conventions
+### Working with Features
+When working on features:
+1. Check `/documentation/features/active/` for current work
+2. Look for `[feature-name]-spec.md` for technical specifications
+3. Track progress in `[feature-name]-progress.md`
+4. Reference completed features for implementation patterns
+
+See `/documentation/README.md` for documentation standards and templates.
