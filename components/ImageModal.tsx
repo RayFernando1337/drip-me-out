@@ -3,8 +3,13 @@
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Copy, Check, Twitter, Share2 } from "lucide-react";
+import { X, Copy, Check, Twitter, Share2, Settings, ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 
 interface ImageModalProps {
   image: {
@@ -12,6 +17,8 @@ interface ImageModalProps {
     url: string;
     createdAt: number;
     generationStatus?: string;
+    sharingEnabled?: boolean;
+    shareExpiresAt?: number;
   } | null;
   isOpen: boolean;
   onClose: () => void;
@@ -19,6 +26,9 @@ interface ImageModalProps {
 
 export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) {
   const [copied, setCopied] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const updateShareSettings = useMutation(api.images.updateShareSettings);
   
   if (!image) return null;
   
@@ -57,6 +67,44 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
         console.log("Share cancelled");
       }
     }
+  };
+
+  const handleSharingToggle = async (enabled: boolean) => {
+    setSharingEnabled(enabled);
+    try {
+      await updateShareSettings({
+        imageId: image._id as Id<"images">,
+        sharingEnabled: enabled,
+      });
+      toast.success(enabled ? "Sharing enabled" : "Sharing disabled");
+    } catch {
+      toast.error("Failed to update sharing settings");
+      setSharingEnabled(!enabled); // Revert on error
+    }
+  };
+
+  const handleExpirationChange = async (value: string) => {
+    const hours = value === "never" ? 0 : parseInt(value);
+    try {
+      await updateShareSettings({
+        imageId: image._id as Id<"images">,
+        sharingEnabled: true,
+        expirationHours: hours || undefined,
+      });
+      setSharingEnabled(true);
+      toast.success("Expiration updated");
+    } catch {
+      toast.error("Failed to update expiration");
+    }
+  };
+
+  const getExpirationValue = () => {
+    if (!image.shareExpiresAt) return "never";
+    const hoursLeft = Math.floor((image.shareExpiresAt - Date.now()) / (1000 * 60 * 60));
+    if (hoursLeft <= 24) return "24";
+    if (hoursLeft <= 168) return "168";
+    if (hoursLeft <= 720) return "720";
+    return "never";
   };
 
   return (
@@ -109,6 +157,59 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                 <Share2 className="w-4 h-4" />
                 Share
               </Button>
+            )}
+          </div>
+          
+          <div className="border-t pt-4 mt-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSettings(!showSettings)}
+              className="w-full justify-between"
+            >
+              <span className="flex items-center gap-2">
+                <Settings className="w-4 h-4" />
+                Share Settings
+              </span>
+              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </Button>
+            
+            {showSettings && (
+              <div className="mt-4 space-y-4">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="sharing-toggle" className="text-sm font-medium">
+                    Enable Sharing
+                  </label>
+                  <Switch
+                    id="sharing-toggle"
+                    checked={sharingEnabled}
+                    onCheckedChange={handleSharingToggle}
+                  />
+                </div>
+                
+                {sharingEnabled && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Link Expiration</label>
+                    <Select onValueChange={handleExpirationChange} defaultValue={getExpirationValue()}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="24">24 hours</SelectItem>
+                        <SelectItem value="168">7 days</SelectItem>
+                        <SelectItem value="720">30 days</SelectItem>
+                        <SelectItem value="never">Never expire</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
+                {!sharingEnabled && (
+                  <p className="text-sm text-muted-foreground">
+                    When sharing is disabled, your image link will not be accessible to others.
+                  </p>
+                )}
+              </div>
             )}
           </div>
         </div>
