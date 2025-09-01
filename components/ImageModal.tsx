@@ -1,25 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { X, Copy, Check, Twitter, Share2, Settings, ChevronDown, ChevronUp } from "lucide-react";
-import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useMutation, useQuery } from "convex/react";
+import { Check, ChevronDown, ChevronUp, Copy, Settings, Share2, Twitter, X } from "lucide-react";
+import Image from "next/image";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+
+// Infer the type from the actual query return type
+type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
 
 interface ImageModalProps {
-  image: {
-    _id: string;
-    url: string;
-    createdAt: number;
-    generationStatus?: string;
-    sharingEnabled?: boolean;
-    shareExpiresAt?: number;
-  } | null;
+  image: ImageFromQuery | null;
   isOpen: boolean;
   onClose: () => void;
 }
@@ -28,13 +31,18 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+
+  // Update state when image prop changes
+  useEffect(() => {
+    setSharingEnabled(image?.sharingEnabled !== false);
+  }, [image?.sharingEnabled]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
-  
+
   if (!image) return null;
-  
+
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/share/${image._id}`;
-    
+
     try {
       await navigator.clipboard.writeText(shareUrl);
       setCopied(true);
@@ -54,7 +62,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
 
   const handleNativeShare = async () => {
     const shareUrl = `${window.location.origin}/share/${image._id}`;
-    
+
     if (navigator.share) {
       try {
         await navigator.share({
@@ -115,33 +123,32 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
             <div className="text-sm text-muted-foreground">
               Created {new Date(image.createdAt).toLocaleDateString()}
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              className="rounded-full"
-            >
+            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
               <X className="h-4 w-4" />
             </Button>
           </div>
         </DialogHeader>
         <div className="p-4">
-          <img
-            src={image.url}
-            alt="Full size image"
-            className="w-full h-auto rounded-lg mb-4"
-            style={{ maxHeight: "calc(90vh - 180px)", objectFit: "contain" }}
-          />
+          <div
+            className="w-full rounded-lg mb-4 overflow-hidden"
+            style={{ maxHeight: "calc(90vh - 180px)" }}
+          >
+            <Image
+              src={image.url}
+              alt="Full size image"
+              width={800}
+              height={600}
+              className="w-full h-auto rounded-lg"
+              style={{ objectFit: "contain", maxHeight: "calc(90vh - 180px)" }}
+            />
+          </div>
           <div className="flex justify-center gap-2">
-            <Button 
-              onClick={handleShare} 
-              className="flex items-center gap-2"
-            >
+            <Button onClick={handleShare} className="flex items-center gap-2">
               {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               {copied ? "Copied!" : "Copy Share Link"}
             </Button>
-            <Button 
-              onClick={handleTwitterShare} 
+            <Button
+              onClick={handleTwitterShare}
               variant="outline"
               className="flex items-center gap-2"
             >
@@ -149,8 +156,8 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
               Share on X
             </Button>
             {typeof navigator !== "undefined" && "share" in navigator && (
-              <Button 
-                onClick={handleNativeShare} 
+              <Button
+                onClick={handleNativeShare}
                 variant="outline"
                 className="flex items-center gap-2"
               >
@@ -159,7 +166,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
               </Button>
             )}
           </div>
-          
+
           <div className="border-t pt-4 mt-4">
             <Button
               variant="ghost"
@@ -171,9 +178,13 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                 <Settings className="w-4 h-4" />
                 Share Settings
               </span>
-              {showSettings ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+              {showSettings ? (
+                <ChevronUp className="w-4 h-4" />
+              ) : (
+                <ChevronDown className="w-4 h-4" />
+              )}
             </Button>
-            
+
             {showSettings && (
               <div className="mt-4 space-y-4">
                 <div className="flex items-center justify-between">
@@ -186,11 +197,14 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                     onCheckedChange={handleSharingToggle}
                   />
                 </div>
-                
+
                 {sharingEnabled && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">Link Expiration</label>
-                    <Select onValueChange={handleExpirationChange} defaultValue={getExpirationValue()}>
+                    <Select
+                      onValueChange={handleExpirationChange}
+                      defaultValue={getExpirationValue()}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -203,7 +217,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                     </Select>
                   </div>
                 )}
-                
+
                 {!sharingEnabled && (
                   <p className="text-sm text-muted-foreground">
                     When sharing is disabled, your image link will not be accessible to others.

@@ -1,14 +1,14 @@
-import { v } from "convex/values";
-import { internalAction, mutation } from "./_generated/server";
-import { internal, api } from "./_generated/api";
 import { GoogleGenAI } from "@google/genai";
+import { v } from "convex/values";
+import { api, internal } from "./_generated/api";
+import { internalAction, mutation } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
@@ -43,7 +43,10 @@ export const updateImageStatus = mutation({
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
-    const updateData: any = { generationStatus: status };
+    const updateData: {
+      generationStatus: string;
+      generationError?: string;
+    } = { generationStatus: status };
     if (error) {
       updateData.generationError = error;
     }
@@ -143,9 +146,7 @@ export const generateImage = internalAction({
       // Load the source image and encode as base64 for inlineData
       const response = await fetch(baseImageUrl);
       if (!response.ok) {
-        throw new Error(
-          `Failed to fetch uploaded image from storage: ${response.statusText}`
-        );
+        throw new Error(`Failed to fetch uploaded image from storage: ${response.statusText}`);
       }
       const mimeType = response.headers.get("content-type") || "image/png";
       const arrayBuffer = await response.arrayBuffer();
@@ -153,7 +154,9 @@ export const generateImage = internalAction({
 
       // Follow the official SDK example: text + inlineData parts
       const contents = [
-        { text: "Add a bust down diamond chain, if the person is smiling, make have diamond grills" },
+        {
+          text: "Add a bust down diamond chain, if the person is smiling, make have diamond grills",
+        },
         {
           inlineData: {
             mimeType,
@@ -174,11 +177,13 @@ export const generateImage = internalAction({
 
       // Find first inlineData part with image data
       let b64Out: string | null = null;
-      const parts: Array<any> = candidates[0].content?.parts ?? [];
+      const parts: Array<{
+        text?: string;
+        inlineData?: { mimeType?: string; data?: string };
+      }> = candidates[0].content?.parts ?? [];
       for (const part of parts) {
-        const inline = part.inlineData as { data?: string } | undefined;
-        if (inline?.data) {
-          b64Out = inline.data;
+        if (part.inlineData?.data) {
+          b64Out = part.inlineData.data;
           break;
         }
       }
@@ -208,19 +213,21 @@ export const generateImage = internalAction({
         status: "completed",
       });
 
-      console.log(`[generateImage] Successfully generated image for originalImageId: ${originalImageId}`);
-
+      console.log(
+        `[generateImage] Successfully generated image for originalImageId: ${originalImageId}`
+      );
     } catch (error) {
       console.error(`[generateImage] Failed to generate image:`, error);
 
       // Mark the original image as failed with more detailed error info
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred during generation';
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error occurred during generation";
 
       try {
         await ctx.runMutation(api.generate.updateImageStatus, {
           imageId: originalImageId,
           status: "failed",
-          error: errorMessage
+          error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
       } catch (updateError) {

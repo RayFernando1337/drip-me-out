@@ -8,23 +8,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
+import { GithubIcon } from "lucide-react";
+import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Github, GithubIcon } from "lucide-react";
-import Link from "next/link";
-
-// Type definition for image objects (matching Convex schema)
-interface ImageObject {
-  _id: string;
-  body: string;
-  createdAt: number;
-  _creationTime: number;
-  isGenerated?: boolean;
-  originalImageId?: string;
-  generationStatus?: string;
-  generationError?: string;
-  url: string | null;
-}
 
 export default function Home() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
@@ -37,11 +24,12 @@ export default function Home() {
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const images = useQuery(api.images.getImages) || [];
+  const imagesData = useQuery(api.images.getImages);
+  const images = useMemo(() => imagesData || [], [imagesData]);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  // Pagination state for infinite scroll
-  const [displayedImages, setDisplayedImages] = useState<ImageObject[]>([]);
+  // Pagination state for infinite scroll - infer type from query result
+  const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
   const [currentPage, setCurrentPage] = useState(0);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const IMAGES_PER_PAGE = 12; // 3 columns x 4 rows
@@ -52,17 +40,15 @@ export default function Home() {
 
   // Memoize generated images to prevent infinite re-renders
   const generatedImages = useMemo(() => {
-    return images.filter(img => img.isGenerated);
+    return images.filter((img) => img.isGenerated);
   }, [images]);
 
   // Check if there are any actively processing images
   const hasActiveGenerations = useMemo(() => {
-    return images.some(img =>
-      img.generationStatus === 'pending' ||
-      img.generationStatus === 'processing'
+    return images.some(
+      (img) => img.generationStatus === "pending" || img.generationStatus === "processing"
     );
   }, [images]);
-
 
   // Initialize displayed images when images load (only when content actually changes)
   useEffect(() => {
@@ -70,8 +56,10 @@ export default function Home() {
     const currentImagesLength = images.length;
 
     // Only update if the actual content has changed, not just references
-    if (currentGeneratedLength !== prevGeneratedLengthRef.current ||
-      currentImagesLength !== prevImagesLengthRef.current) {
+    if (
+      currentGeneratedLength !== prevGeneratedLengthRef.current ||
+      currentImagesLength !== prevImagesLengthRef.current
+    ) {
       setDisplayedImages(generatedImages.slice(0, IMAGES_PER_PAGE));
       setCurrentPage(0);
 
@@ -102,10 +90,7 @@ export default function Home() {
       setIsLoadingMore(true);
 
       // Load images immediately without artificial delay for fluid experience
-      setDisplayedImages(prev => [
-        ...prev,
-        ...generatedImages.slice(startIndex, endIndex)
-      ]);
+      setDisplayedImages((prev) => [...prev, ...generatedImages.slice(startIndex, endIndex)]);
       setCurrentPage(nextPage);
       setIsLoadingMore(false);
     }
@@ -113,11 +98,13 @@ export default function Home() {
 
   // Helper function to check if error is a quota/rate limit error
   const isQuotaError = (error: unknown): boolean => {
-    const errorMessage = error instanceof Error ? error.message : String(error || '');
-    return errorMessage.includes('quota') ||
-      errorMessage.includes('RESOURCE_EXHAUSTED') ||
-      errorMessage.includes('rate limit') ||
-      errorMessage.includes('429');
+    const errorMessage = error instanceof Error ? error.message : String(error || "");
+    return (
+      errorMessage.includes("quota") ||
+      errorMessage.includes("RESOURCE_EXHAUSTED") ||
+      errorMessage.includes("rate limit") ||
+      errorMessage.includes("429")
+    );
   };
 
   const handleImageCapture = async (imageData: string) => {
@@ -129,7 +116,7 @@ export default function Home() {
       const blob = await response.blob();
 
       // Create a File object from the blob
-      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: 'image/jpeg' });
+      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
 
       // Step 1: Get an upload URL from Convex
       const uploadUrl = await generateUploadUrl();
@@ -164,11 +151,13 @@ export default function Home() {
         // Show appropriate toast based on error type
         if (isQuotaError(genError)) {
           toast.error("Gemini API Quota Exceeded", {
-            description: "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
+            description:
+              "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
             duration: 8000,
             action: {
               label: "Learn More",
-              onClick: () => window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
+              onClick: () =>
+                window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
             },
           });
         } else {
@@ -182,7 +171,6 @@ export default function Home() {
       }
 
       console.log("Image captured and uploaded successfully!");
-
     } catch (error) {
       console.error("Failed to upload captured image:", error);
       // You could add error handling UI here
@@ -222,7 +210,8 @@ export default function Home() {
 
         // Show success toast
         toast.success("Image Generation Started!", {
-          description: "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
+          description:
+            "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
           duration: 4000,
         });
       } catch (genError) {
@@ -231,11 +220,13 @@ export default function Home() {
         // Show appropriate toast based on error type
         if (isQuotaError(genError)) {
           toast.error("Gemini API Quota Exceeded", {
-            description: "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
+            description:
+              "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
             duration: 8000,
             action: {
               label: "Learn More",
-              onClick: () => window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
+              onClick: () =>
+                window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
             },
           });
         } else {
@@ -251,14 +242,13 @@ export default function Home() {
       // Reset the form
       setSelectedImage(null);
       imageInput.current!.value = "";
-
     } catch (error) {
       console.error("Upload failed:", error);
       // You could add error handling UI here
     } finally {
       setIsUploading(false);
     }
-  }
+  };
 
   return (
     <div className="flex flex-col w-full min-h-screen p-4 lg:p-6">
@@ -288,7 +278,9 @@ export default function Home() {
           <div className="lg:max-w-2xl w-full">
             <Tabs defaultValue="camera">
               <TabsList>
-                <TabsTrigger value="camera" className="text-sm font-medium">📸 Camera</TabsTrigger>
+                <TabsTrigger value="camera" className="text-sm font-medium">
+                  📸 Camera
+                </TabsTrigger>
                 {/* <TabsTrigger value="upload" className="text-sm font-medium">📤 Upload</TabsTrigger> */}
               </TabsList>
               <TabsContent value="upload" className="mt-4">
@@ -314,7 +306,11 @@ export default function Home() {
                         className="w-full h-11"
                         disabled={isUploading || isGenerating || !selectedImage}
                       >
-                        {isUploading ? "Uploading..." : isGenerating ? "Generating..." : "Upload & Generate"}
+                        {isUploading
+                          ? "Uploading..."
+                          : isGenerating
+                            ? "Generating..."
+                            : "Upload & Generate"}
                       </Button>
                     </div>
                   </CardContent>
@@ -322,7 +318,10 @@ export default function Home() {
               </TabsContent>
               <TabsContent value="camera" className="mt-4">
                 <div className="w-full">
-                  <Webcam onCapture={handleImageCapture} isUploading={isCapturing || isGenerating} />
+                  <Webcam
+                    onCapture={handleImageCapture}
+                    isUploading={isCapturing || isGenerating}
+                  />
                 </div>
               </TabsContent>
             </Tabs>
@@ -331,14 +330,7 @@ export default function Home() {
           {/* Image Preview Section */}
           <div className="w-full">
             <ImagePreview
-              images={[]}
-              uploadedImages={displayedImages.map(image => ({
-                _id: image._id,
-                body: image.body,
-                createdAt: image.createdAt,
-                url: image.url ?? "",
-                generationStatus: image.generationStatus
-              }))}
+              images={displayedImages}
               totalImages={generatedImages.length}
               currentPage={currentPage}
               imagesPerPage={IMAGES_PER_PAGE}

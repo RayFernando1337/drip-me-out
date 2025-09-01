@@ -1,20 +1,22 @@
 "use client";
 
-import { useQuery } from "convex/react";
+import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { useQuery } from "convex/react";
+import Image from "next/image";
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
 
+// Use Convex Id type for type safety
 interface SharePageClientProps {
-  imageId: string;
+  imageId: Id<"images">;
 }
 
 export default function SharePageClient({ imageId }: SharePageClientProps) {
-  const image = useQuery(api.images.getImageById, { 
-    imageId: imageId as Id<"images"> 
+  const image = useQuery(api.images.getImageById, {
+    imageId,
   });
-  
+
   if (!image) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -30,15 +32,18 @@ export default function SharePageClient({ imageId }: SharePageClientProps) {
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
-        <img
-          src={image.url}
-          alt="Shared dripped out image"
-          className="w-full rounded-lg shadow-2xl"
-        />
+        <div className="relative w-full aspect-square">
+          <Image
+            src={image.url}
+            alt="Shared dripped out image"
+            fill
+            className="rounded-lg shadow-2xl object-cover"
+          />
+        </div>
         <div className="mt-6 text-center">
           <Link href="/">
             <Button>Create Your Own</Button>
