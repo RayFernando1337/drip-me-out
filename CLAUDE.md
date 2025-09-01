@@ -88,20 +88,32 @@ When making changes to files in the `/convex` directory, always run `bunx convex
 
 ## Critical Type Safety Rules for Convex
 
-### ⚠️ NEVER Create Manual Type Compositions
-**WRONG:**
+### The Zen of Convex - Core Philosophy
+- **Performance**: Keep functions under 100ms, work with few hundred records max
+- **Reactivity**: Use queries for almost all reads - they're reactive, cacheable, consistent
+- **Simplicity**: Let Convex handle caching & consistency, avoid complex local state
+- **Actions**: Use sparingly, record progress incrementally, chain with mutations
+
+### ⚠️ Type Safety Best Practices
+**AVOID Manual Type Compositions:**
 ```typescript
-// ❌ Never do this - violates Convex patterns
+// ❌ Avoid - Can drift from actual return types
 type ImageWithUrl = Doc<"images"> & { url: string };
 ```
 
-**CORRECT:**
+**USE Type Inference:**
 ```typescript
-// ✅ Use type inference from query return types
+// ✅ Recommended - Type inference from validators
+import { FunctionReturnType } from "convex/server";
+type QueryResult = FunctionReturnType<typeof api.images.getImages>;
+
+// ✅ Or infer from query results
 type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
 
-// ✅ Or let TypeScript infer inline
-const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
+// ✅ Use Infer for validator types
+import { Infer, v } from "convex/values";
+const imageValidator = v.object({ url: v.string() });
+type Image = Infer<typeof imageValidator>;
 ```
 
 ### Query Result Handling
@@ -133,20 +145,26 @@ const { imageId } = await params;
 return <Component imageId={imageId as Id<"images">} />;
 ```
 
-### Backend Return Validators
-**ALWAYS** include return validators in Convex functions:
+### Validators Are CRITICAL for Security
+**ALWAYS** include argument and return validators in public Convex functions:
 ```typescript
-// ✅ Every function must have returns validator
+// ✅ Secure & Type-Safe
 export const getImages = query({
-  args: {},
+  args: {},  // Always include args, even if empty
   returns: v.array(v.object({
     _id: v.id("images"),
     url: v.string(),
-    // ... other fields
+    // ... define ALL fields
   })),
   handler: async (ctx) => { /* ... */ }
 });
 ```
+
+**Why Validators Are Non-Negotiable:**
+- **Security**: Public functions can be called by anyone - validators prevent attacks
+- **Type Safety**: Automatic TypeScript type inference from validators
+- **Runtime Safety**: TypeScript types don't exist at runtime - validators do
+- **API Contract**: Validators document and enforce your API
 
 ### Type Predicate for Filtering
 When filtering arrays with nullable values:
