@@ -14,7 +14,7 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as generate from "../generate.js";
-import type * as https from "../https.js";
+import type * as http from "../http.js";
 import type * as images from "../images.js";
 
 /**
@@ -27,7 +27,7 @@ import type * as images from "../images.js";
  */
 declare const fullApi: ApiFromModules<{
   generate: typeof generate;
-  https: typeof https;
+  http: typeof http;
   images: typeof images;
 }>;
 export declare const api: FilterApi<
