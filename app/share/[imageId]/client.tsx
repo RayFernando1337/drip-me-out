@@ -2,31 +2,61 @@
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
-import { Id } from "@/convex/_generated/dataModel";
-import { useQuery } from "convex/react";
+import { FunctionReturnType } from "convex/server";
 import Image from "next/image";
 import Link from "next/link";
 
-// Use Convex Id type for type safety
+// Use type inference from the API function for type safety
 interface SharePageClientProps {
-  imageId: Id<"images">;
+  image: FunctionReturnType<typeof api.images.getImageById>;
 }
 
-export default function SharePageClient({ imageId }: SharePageClientProps) {
-  const image = useQuery(api.images.getImageById, {
-    imageId,
-  });
-
-  if (!image) {
+export default function SharePageClient({ image }: SharePageClientProps) {
+  // Check if image is null (not found)
+  if (image === null) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Image Not Found</h1>
           <p className="text-muted-foreground mb-6">
-            This image may have expired or sharing may be disabled.
+            This image doesn&apos;t exist or has been removed.
           </p>
           <Link href="/">
             <Button>Go to App</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if sharing is disabled
+  if (image.sharingEnabled === false) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Sharing Disabled</h1>
+          <p className="text-muted-foreground mb-6">
+            The owner has disabled sharing for this image.
+          </p>
+          <Link href="/">
+            <Button>Create Your Own</Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // Check if share link has expired
+  if (image.shareExpiresAt && image.shareExpiresAt < Date.now()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold mb-4">Link Expired</h1>
+          <p className="text-muted-foreground mb-6">
+            This share link has expired and is no longer available.
+          </p>
+          <Link href="/">
+            <Button>Create Your Own</Button>
           </Link>
         </div>
       </div>
