@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Database } from "lucide-react";
 import { useState } from "react";
 import ConvexShowcase from "./ConvexShowcase";
@@ -32,17 +32,17 @@ export default function ConvexFloatingBubble() {
         </div>
 
         <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden p-4 bg-background border-border/50">
-          <div className="flex items-center justify-between mb-4 pb-2 border-b border-border/50">
+          <DialogHeader className="mb-4 pb-2 border-b border-border/50">
             <div className="flex items-center gap-2">
               <div className="p-1.5 bg-primary rounded-md">
                 <Database className="w-4 h-4 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="text-lg font-medium">Convex Features</h2>
-                <p className="text-xs text-muted-foreground">Real-time backend showcase</p>
+                <DialogTitle className="text-lg font-medium">Convex Features</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">Real-time backend showcase</DialogDescription>
               </div>
             </div>
-          </div>
+          </DialogHeader>
           <div className="overflow-y-auto max-h-[calc(80vh-80px)]">
             <ConvexShowcase />
           </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -13,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronDown, ChevronUp, Copy, Settings, Share2, Twitter, X } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Copy, Settings, Share2, X } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -119,14 +119,10 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
         <DialogHeader className="p-4 pb-0">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-muted-foreground">
-              Created {new Date(image.createdAt).toLocaleDateString()}
-            </div>
-            <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>Image Preview</DialogTitle>
+          <DialogDescription>
+            Created {new Date(image.createdAt).toLocaleDateString()}
+          </DialogDescription>
         </DialogHeader>
         <div className="p-4">
           <div
@@ -140,6 +136,8 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
               height={600}
               className="w-full h-auto rounded-lg"
               style={{ objectFit: "contain", maxHeight: "calc(90vh - 180px)" }}
+              unoptimized={true}
+              priority={true}
             />
           </div>
           <div className="flex justify-center gap-2">
@@ -152,7 +150,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
               variant="outline"
               className="flex items-center gap-2"
             >
-              <Twitter className="w-4 h-4" />
+              <X className="w-4 h-4" />
               Share on X
             </Button>
             {typeof navigator !== "undefined" && "share" in navigator && (

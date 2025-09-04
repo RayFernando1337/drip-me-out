@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { GithubIcon } from "lucide-react";
+import { Github } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -34,8 +34,7 @@ export default function Home() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const IMAGES_PER_PAGE = 12; // 3 columns x 4 rows
 
-  // Use refs to prevent infinite loops
-  const prevImagesLengthRef = useRef<number>(0);
+  // Use ref to prevent infinite loops
   const prevGeneratedLengthRef = useRef<number>(0);
 
   // Memoize generated images to prevent infinite re-renders
@@ -53,35 +52,43 @@ export default function Home() {
   // Initialize displayed images when images load (only when content actually changes)
   useEffect(() => {
     const currentGeneratedLength = generatedImages.length;
-    const currentImagesLength = images.length;
 
     // Only update if the actual content has changed, not just references
-    if (
-      currentGeneratedLength !== prevGeneratedLengthRef.current ||
-      currentImagesLength !== prevImagesLengthRef.current
-    ) {
-      setDisplayedImages(generatedImages.slice(0, IMAGES_PER_PAGE));
+    if (currentGeneratedLength !== prevGeneratedLengthRef.current) {
+      // Deduplicate images by ID to prevent duplicates
+      const uniqueImages = generatedImages.filter((img, index, arr) => 
+        arr.findIndex(item => item._id === img._id) === index
+      );
+      
+      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
       setCurrentPage(0);
 
       // Update refs to track previous state
       prevGeneratedLengthRef.current = currentGeneratedLength;
-      prevImagesLengthRef.current = currentImagesLength;
     }
-  }, [generatedImages, images]);
+  }, [generatedImages]);
 
   // Reset pagination when new images are added
   useEffect(() => {
     if (generatedImages.length > 0 && displayedImages.length === 0) {
-      setDisplayedImages(generatedImages.slice(0, IMAGES_PER_PAGE));
+      const uniqueImages = generatedImages.filter((img, index, arr) => 
+        arr.findIndex(item => item._id === img._id) === index
+      );
+      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
       setCurrentPage(0);
     }
-  }, [generatedImages.length, displayedImages.length]);
+  }, [generatedImages.length, displayedImages.length, generatedImages]);
 
   // Handle loading more images for infinite scroll
   const handleLoadMore = useCallback(() => {
     if (isLoadingMore) return;
 
-    const totalImages = generatedImages.length;
+    // Deduplicate generatedImages first
+    const uniqueGeneratedImages = generatedImages.filter((img, index, arr) => 
+      arr.findIndex(item => item._id === img._id) === index
+    );
+
+    const totalImages = uniqueGeneratedImages.length;
     const nextPage = currentPage + 1;
     const startIndex = nextPage * IMAGES_PER_PAGE;
     const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
@@ -89,8 +96,15 @@ export default function Home() {
     if (startIndex < totalImages) {
       setIsLoadingMore(true);
 
-      // Load images immediately without artificial delay for fluid experience
-      setDisplayedImages((prev) => [...prev, ...generatedImages.slice(startIndex, endIndex)]);
+      // Load images and deduplicate to prevent showing same image twice
+      const newImages = uniqueGeneratedImages.slice(startIndex, endIndex);
+      setDisplayedImages((prev) => {
+        const combined = [...prev, ...newImages];
+        // Final deduplication step
+        return combined.filter((img, index, arr) => 
+          arr.findIndex(item => item._id === img._id) === index
+        );
+      });
       setCurrentPage(nextPage);
       setIsLoadingMore(false);
     }
@@ -263,7 +277,7 @@ export default function Home() {
             aria-label="View source code on GitHub"
           >
             <Button variant="ghost" size="icon">
-              <GithubIcon />
+              <Github />
             </Button>
           </Link>
         </div>

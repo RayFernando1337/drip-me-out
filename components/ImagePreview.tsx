@@ -68,7 +68,7 @@ export default function ImagePreview({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {allImages.map((image) => (
           <div
-            key={`${image.type}-${image.index}`}
+            key={image.data._id}
             className="group cursor-pointer"
             onClick={() => {
               setSelectedImage(image.data);
@@ -82,6 +82,8 @@ export default function ImagePreview({
                   alt={`Image ${new Date(image.data.createdAt).toLocaleDateString()}`}
                   fill
                   className="object-cover transition-transform group-hover:scale-105"
+                  unoptimized={true}
+                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                   onError={(e) => {
                     // Fallback to placeholder if image fails to load
                     const target = e.target as HTMLImageElement;
