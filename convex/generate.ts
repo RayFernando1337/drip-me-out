@@ -155,7 +155,31 @@ export const generateImage = internalAction({
       // Follow the official SDK example: text + inlineData parts
       const contents = [
         {
-          text: "Add a bust down diamond chain, if the person is smiling, make have diamond grills",
+          text: `Identify 1-3 key objects in the image that would create maximum visual impact when stylized (prioritize: food being eaten, drinks, objects being held, or prominent items in the scene).
+
+Transform these objects into exaggerated 2D whimsical anime illustrations with:
+
+STYLE REQUIREMENTS:
+- Bold black outlines with hand-drawn wobbles
+- Vibrant, flat anime colors 
+- Dramatically exaggerated proportions (make it 2-3x more dramatic than realistic)
+
+ADD DYNAMIC ELEMENTS:
+- Create motion lines, swirls, or flowing extensions coming OUT from the object
+- For food: add steam swirls, floating ingredients, or exaggerated textures spilling upward
+- For drinks: add splash effects, bubbles, or pour animations
+- For objects: add sparkles, energy lines, or playful emanations
+- Make elements appear to "break free" from the photo into illustrated space
+
+ANIMATION FEEL:
+- Should look like a Studio Ghibli food scene inserted into real life
+- Emphasize movement even in still objects (swaying, floating, emanating)
+- Add small cartoon details like shine marks, emotion symbols, or tiny decorative swirls
+- Go BOLD - if it doesn't make someone say "whoa!", make it more exaggerated
+
+Keep humans photorealistic. Other background elements can have subtle stylization if it enhances the overall magical effect, but the main object(s) should be the star.
+
+The goal: create a surreal moment where anime has leaked into reality in the most delightful way possible.`,
         },
         {
           inlineData: {

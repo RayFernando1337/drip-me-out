@@ -19,7 +19,7 @@ export default function SharePageClient({ image }: SharePageClientProps) {
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Image Not Found</h1>
           <p className="text-muted-foreground mb-6">
-            This image doesn&apos;t exist or has been removed.
+            This image doesn't exist or has been removed.
           </p>
           <Link href="/">
             <Button>Go to App</Button>
@@ -65,13 +65,17 @@ export default function SharePageClient({ image }: SharePageClientProps) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="max-w-2xl w-full">
-        <div className="relative w-full aspect-square">
+      <div className="max-w-4xl w-full">
+        <div className="relative w-full" style={{ maxHeight: "80vh" }}>
           <Image
             src={image.url}
             alt="Shared dripped out image"
-            fill
-            className="rounded-lg shadow-2xl object-cover"
+            width={1200}
+            height={800}
+            className="w-full h-auto rounded-lg shadow-2xl"
+            style={{ objectFit: "contain", maxHeight: "80vh" }}
+            unoptimized={true}
+            priority={true}
           />
         </div>
         <div className="mt-6 text-center">
