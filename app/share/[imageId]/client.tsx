@@ -19,7 +19,7 @@ export default function SharePageClient({ image }: SharePageClientProps) {
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-4">Image Not Found</h1>
           <p className="text-muted-foreground mb-6">
-            This image doesn't exist or has been removed.
+            This image doesn&apos;t exist or has been removed.
           </p>
           <Link href="/">
             <Button>Go to App</Button>
