@@ -1,10 +1,8 @@
 "use client";
-import ConvexFloatingBubble from "@/components/ConvexFloatingBubble";
 import ImagePreview from "@/components/ImagePreview";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -63,6 +61,7 @@ function Content() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [showMobileCamera, setShowMobileCamera] = useState(false);
 
   // Use the new simplified queries
   const galleryImages = useQuery(api.images.getGalleryImages) || [];
@@ -241,7 +240,8 @@ function Content() {
 
   return (
     <div className="flex flex-col w-full min-h-screen p-4 lg:p-6">
-      <div className="flex flex-col items-start justify-start gap-2 w-full">
+      {/* Header */}
+      <div className="flex flex-col items-start justify-start gap-2 w-full mb-6 sm:mb-8">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-semibold">Convex Drip Me Out</h1>
           <Link
@@ -260,144 +260,180 @@ function Content() {
           Upload an image or capture a photo to see what you look like with a diamond chain.
         </p>
       </div>
-      <div className="w-full mt-6 sm:mt-8 lg:mt-10">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-          <div className="lg:max-w-2xl w-full">
-            <Tabs defaultValue="camera">
-              <TabsList>
-                <TabsTrigger value="camera" className="text-sm font-medium">
-                  📸 Camera
-                </TabsTrigger>
-                <TabsTrigger value="upload" className="text-sm font-medium">
-                  📤 Upload
-                </TabsTrigger>
-                <TabsTrigger value="failed" className="text-sm font-medium">
-                  ⚠️ Failed
-                </TabsTrigger>
-              </TabsList>
-              <TabsContent value="upload" className="mt-4">
-                <form onSubmit={handleSendImage} aria-label="Upload image form">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Upload Image</CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 flex flex-col justify-center">
-                      <div className="space-y-4">
-                        <Input
-                          type="file"
-                          accept="image/jpeg,image/png,image/heic,image/heif"
-                          aria-label="Choose image file"
-                          ref={imageInput}
-                          onChange={(event) => {
-                            setUploadError(null);
-                            setSelectedImage(event.target.files?.[0] ?? null);
-                          }}
-                          disabled={isPreparing || isUploading}
-                          className="w-full"
-                        />
 
-                        {uploadError && (
-                          <div role="alert" className="text-sm text-destructive">
-                            {uploadError.includes("Load failed")
-                              ? "Network lost during upload. Please retry."
-                              : uploadError}
-                          </div>
-                        )}
+      {/* Main Content - Desktop: Side by side, Mobile: Stacked */}
+      <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-6 lg:gap-8">
+        {/* Input Section - Takes 1 column on desktop */}
+        <div className="xl:col-span-1 space-y-6">
+          {/* Upload Section - Primary */}
+          <Card className="w-full">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                📤 Upload Image
+                <span className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded-full">
+                  Recommended
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSendImage} aria-label="Upload image form" className="space-y-4">
+                <div className="space-y-3">
+                  {/* File Upload Button */}
+                  <div className="relative">
+                    <Input
+                      type="file"
+                      accept="image/jpeg,image/png,image/heic,image/heif"
+                      aria-label="Choose image file"
+                      ref={imageInput}
+                      onChange={(event) => {
+                        setUploadError(null);
+                        setSelectedImage(event.target.files?.[0] ?? null);
+                      }}
+                      disabled={isPreparing || isUploading}
+                      className="w-full"
+                    />
+                  </div>
 
-                        <div className="flex gap-2">
-                          <Button
-                            type="submit"
-                            size="sm"
-                            variant="outline"
-                            className="w-full h-11"
-                            aria-busy={isPreparing || isUploading}
-                            disabled={isPreparing || isUploading || !selectedImage}
-                          >
-                            {isPreparing
-                              ? "Preparing..."
-                              : isUploading
-                                ? "Uploading..."
-                                : "Upload & Generate"}
-                          </Button>
-                          {uploadError && (
-                            <Button
-                              type="button"
-                              onClick={retryUpload}
-                              size="sm"
-                              variant="default"
-                              className="h-11"
-                              disabled={isPreparing || isUploading}
-                            >
-                              Retry upload
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </form>
-              </TabsContent>
-              <TabsContent value="camera" className="mt-4">
-                <div className="w-full">
+                  {/* Mobile Camera Option */}
+                  <div className="xl:hidden">
+                    <div className="text-xs text-muted-foreground text-center py-2">— or —</div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowMobileCamera(!showMobileCamera)}
+                      disabled={isPreparing || isUploading}
+                    >
+                      📸 {showMobileCamera ? "Hide Camera" : "Take Photo with Camera"}
+                    </Button>
+                  </div>
+                </div>
+
+                {uploadError && (
+                  <div
+                    role="alert"
+                    className="text-sm text-destructive bg-destructive/10 p-3 rounded-lg"
+                  >
+                    {uploadError.includes("Load failed")
+                      ? "Network lost during upload. Please retry."
+                      : uploadError}
+                  </div>
+                )}
+
+                <div className="flex gap-2">
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="flex-1 h-11"
+                    aria-busy={isPreparing || isUploading}
+                    disabled={isPreparing || isUploading || !selectedImage}
+                  >
+                    {isPreparing
+                      ? "Preparing..."
+                      : isUploading
+                        ? "Uploading..."
+                        : "Upload & Generate"}
+                  </Button>
+                  {uploadError && (
+                    <Button
+                      type="button"
+                      onClick={retryUpload}
+                      size="sm"
+                      variant="outline"
+                      className="h-11"
+                      disabled={isPreparing || isUploading}
+                    >
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              </form>
+
+              {/* Mobile Camera Integration */}
+              {showMobileCamera && (
+                <div className="xl:hidden border-t pt-4 mt-4">
                   <Webcam onCapture={handleImageCapture} isUploading={isCapturing} />
                 </div>
-              </TabsContent>
-              <TabsContent value="failed" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Failed Images</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {failedImages.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">
-                        No failed images. Great job!
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Camera Section - Desktop Only */}
+          <Card className="w-full hidden xl:block">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                📸 Take Photo
+                <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full">
+                  Alternative
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Webcam onCapture={handleImageCapture} isUploading={isCapturing} />
+            </CardContent>
+          </Card>
+
+          {/* Failed Images - Compact */}
+          {failedImages.length > 0 && (
+            <Card className="w-full">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-destructive">
+                  ⚠️ Failed Images ({failedImages.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {failedImages.slice(0, 3).map((img) => (
+                    <div key={img._id} className="flex items-center gap-3 p-2 border rounded-lg">
+                      <div className="w-12 h-12 bg-muted rounded overflow-hidden flex-shrink-0">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={img.url}
+                          alt="Failed"
+                          className="object-cover w-full h-full opacity-50"
+                        />
                       </div>
-                    ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        {failedImages.map((img) => (
-                          <div key={img._id} className="border rounded-lg overflow-hidden">
-                            <div className="aspect-square bg-muted relative">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={img.url}
-                                alt="Failed"
-                                className="object-cover w-full h-full"
-                              />
-                              <div className="absolute inset-0 bg-red-600/50 flex items-center justify-center">
-                                <span className="text-white text-sm font-medium">Failed</span>
-                              </div>
-                            </div>
-                            <div className="p-3 flex items-center justify-between gap-2">
-                              <div className="text-xs text-muted-foreground line-clamp-2">
-                                {img.generationError || "Unknown error"}
-                              </div>
-                              <Button size="sm" onClick={() => handleRetryFailed(img._id)}>
-                                Retry
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs text-muted-foreground line-clamp-2">
+                          {img.generationError || "Unknown error"}
+                        </div>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </div>
-          <div className="w-full">
-            <ImagePreview images={galleryImages} />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRetryFailed(img._id)}
+                      >
+                        Retry
+                      </Button>
+                    </div>
+                  ))}
+                  {failedImages.length > 3 && (
+                    <div className="text-xs text-muted-foreground text-center pt-2">
+                      +{failedImages.length - 3} more failed images
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </div>
+
+        {/* Gallery Section - Takes 2 columns on desktop */}
+        <div className="xl:col-span-2">
+          <ImagePreview images={galleryImages} />
+        </div>
+      </div>
+
+      {/* Generation Status Indicator */}
+      {hasActiveGenerations && (
+        <div className="fixed bottom-4 right-4 lg:bottom-6 lg:right-6 z-50">
+          <div className="flex items-center gap-2 bg-card/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-lg">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent"></div>
+            <span className="text-sm text-muted-foreground font-medium">Generating...</span>
           </div>
         </div>
-        {hasActiveGenerations && (
-          <div className="fixed bottom-4 right-4 lg:top-6 lg:right-6 z-50">
-            <div className="flex items-center gap-2 bg-card/95 backdrop-blur-sm border border-border rounded-lg px-3 py-2 shadow-lg">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-accent"></div>
-              <span className="text-sm text-muted-foreground font-medium">Generating...</span>
-            </div>
-          </div>
-        )}
-      </div>
-      <ConvexFloatingBubble />
+      )}
     </div>
   );
 }

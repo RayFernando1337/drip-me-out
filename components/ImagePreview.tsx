@@ -25,8 +25,6 @@ export default function ImagePreview({
   images = [],
   uploadedImages = [],
   totalImages = 0,
-  currentPage = 0,
-  imagesPerPage = 12,
   onLoadMore,
   hasMore = false,
   isLoading = false,
@@ -114,8 +112,8 @@ export default function ImagePreview({
                       )}
                     </div>
                   </div>
-                ) : (image.data.generationStatus === "pending" ||
-                  image.data.generationStatus === "processing") ? (
+                ) : image.data.generationStatus === "pending" ||
+                  image.data.generationStatus === "processing" ? (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-center text-white">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
