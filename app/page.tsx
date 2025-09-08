@@ -269,47 +269,29 @@ function Content() {
     setIsUploading(true);
     try {
       const prepared = preparedRef.current!;
-      const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": prepared.type },
-        body: prepared,
-      });
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
-      }
-      const { storageId } = await result.json();
+      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
       setIsGenerating(true);
-      try {
-        await scheduleImageGeneration({ storageId });
-        toast.success("Image Generation Started!", {
-          description:
-            "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
-          duration: 4000,
+      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
+        scheduleImageGeneration({
+          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
         });
-        // Clear selection on success
-        setSelectedImage(null);
-        preparedRef.current = null;
-        if (imageInput.current) imageInput.current.value = "";
-      } catch (genError) {
-        const msg = genError instanceof Error ? genError.message : String(genError || "");
-        if (msg.startsWith("VALIDATION:")) {
-          toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
-        } else {
-          toast.error("Processing unavailable", {
-            description: "We couldn't start processing right now. Please try again shortly.",
-            duration: 5000,
-          });
-        }
-      } finally {
-        setIsGenerating(false);
-      }
+      await uploadAndSchedule(prepared, generateUploadUrl, scheduleFn);
+      toast.success("Image Generation Started!", {
+        description:
+          "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
+        duration: 4000,
+      });
+      // Clear selection on success
+      setSelectedImage(null);
+      preparedRef.current = null;
+      if (imageInput.current) imageInput.current.value = "";
     } catch (error) {
       console.error("Upload failed:", error);
       const msg = error instanceof Error ? error.message : String(error || "");
       setUploadError(msg);
       toast.error("Upload failed", { description: msg });
     } finally {
+      setIsGenerating(false);
       setIsUploading(false);
     }
   };

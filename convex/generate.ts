@@ -1,31 +1,23 @@
+"use node";
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { internalAction, mutation } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
  */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
+  return Buffer.from(buffer).toString("base64");
 }
 
 /**
  * Helper function to convert base64 to Uint8Array (Convex-compatible)
  */
 function base64ToUint8Array(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(new ArrayBuffer(binaryString.length));
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
+  const buf = Buffer.from(base64, "base64");
+  return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 }
 
 /**
@@ -38,21 +30,25 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export const updateImageStatus = mutation({
   args: {
     imageId: v.id("images"),
-    status: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
     error: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
-    const updateData: {
-      generationStatus: string;
-      generationError?: string;
-    } = { generationStatus: status };
+    const updateData: Partial<Doc<"images">> = { generationStatus: status };
     if (error) {
       updateData.generationError = error;
     }
 
     await ctx.db.patch(imageId, updateData);
+    return null;
   },
 });
 
@@ -64,6 +60,7 @@ export const saveGeneratedImage = mutation({
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId, originalImageId } = args;
 
@@ -84,6 +81,7 @@ export const scheduleImageGeneration = mutation({
   args: {
     storageId: v.id("_storage"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId } = args;
 
@@ -175,6 +173,7 @@ export const generateImage = internalAction({
     originalImageId: v.id("images"),
     contentType: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { storageId, originalImageId, contentType } = args;
 
@@ -191,7 +190,7 @@ export const generateImage = internalAction({
         status: "failed",
         error: "API key not configured",
       });
-      return;
+      return null;
     }
 
     try {
@@ -308,6 +307,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       console.log(
         `[generateImage] Successfully generated image for originalImageId: ${originalImageId}`
       );
+      return null;
     } catch (error) {
       console.error(`[generateImage] Failed to generate image:`, error);
 
@@ -333,11 +333,12 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         const retried = await ctx.runMutation(api.generate.maybeRetryOnce, { imageId: originalImageId });
         if (retried) {
           console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
-          return;
+          return null;
         }
       } catch (retryError) {
         console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
       }
+      return null;
     }
   },
 });

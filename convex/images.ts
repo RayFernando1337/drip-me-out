@@ -17,12 +17,14 @@ export const sendImage = mutation({
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
-    return await ctx.db.insert("images", {
+    // Legacy endpoint kept for compatibility; route all new uploads through scheduleImageGeneration.
+    const id = await ctx.db.insert("images", {
       body: args.storageId,
       createdAt: Date.now(),
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
     });
+    return id;
   },
 });
 
