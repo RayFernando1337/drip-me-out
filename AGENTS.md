@@ -54,6 +54,7 @@ To keep agent context minimal, each major folder has its own AGENTS.md. Agents s
 - Frontend app rules: [app/AGENTS.md](app/AGENTS.md)
 - Shared components rules: [components/AGENTS.md](components/AGENTS.md)
 - Convex backend rules: [convex/AGENTS.md](convex/AGENTS.md)
+- Documentation rules: [documentation/AGENTS.md](documentation/AGENTS.md)
 
 ## Working With Features
 
