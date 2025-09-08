@@ -7,13 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
-import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
+import type { Id } from "@/convex/_generated/dataModel";
 import { SignInButton, UserButton } from "@clerk/nextjs";
+import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { Github } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useRef, useState } from "react";
 import { toast } from "sonner";
-import type { Id } from "@/convex/_generated/dataModel";
 
 export default function Home() {
   return (
@@ -28,7 +28,8 @@ export default function Home() {
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 p-6 text-center">
           <h1 className="text-3xl sm:text-4xl font-semibold">Convex Drip Me Out</h1>
           <p className="text-muted-foreground max-w-prose">
-            Sign in to upload a photo or use your camera, then we’ll generate an anime-styled, drippy chain effect.
+            Sign in to upload a photo or use your camera, then we’ll generate an anime-styled,
+            drippy chain effect.
           </p>
           <SignInButton>
             <Button>Sign in to get started</Button>
@@ -52,7 +53,7 @@ export default function Home() {
 
 function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
-  const scheduleImageGeneration = useMutation(api.generate.scheduleImageGeneration);
+  const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
 
   const imageInput = useRef<HTMLInputElement>(null);
@@ -60,67 +61,13 @@ function Content() {
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-
-  const imagesData = useQuery(api.images.getImages);
-  const images = useMemo(() => imagesData || [], [imagesData]);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const IMAGES_PER_PAGE = 12;
-
-  const prevCombinedLengthRef = useRef<number>(0);
-
-  const combinedImages = useMemo(() => {
-    const pendingOrProcessing = images.filter(
-      (img) =>
-        !img.isGenerated &&
-        (img.generationStatus === "pending" || img.generationStatus === "processing")
-    );
-    const generated = images.filter((img) => img.isGenerated);
-    const all = [...pendingOrProcessing, ...generated];
-    // Ensure unique by _id (defensive)
-    return all.filter((img, index, arr) => arr.findIndex((it) => it._id === img._id) === index);
-  }, [images]);
-
-  const hasActiveGenerations = useMemo(() => {
-    return images.some(
-      (img) => img.generationStatus === "pending" || img.generationStatus === "processing"
-    );
-  }, [images]);
-
-  const failedImages = useMemo(() => {
-    return images.filter((img) => !img.isGenerated && img.generationStatus === "failed");
-  }, [images]);
-
-  // Keep displayed images in sync with live updates (status changes) and pagination
-  useEffect(() => {
-    const uniqueImages = combinedImages.filter((img, index, arr) =>
-      arr.findIndex((item) => item._id === img._id) === index
-    );
-    // Show pages 0..currentPage inclusive
-    const end = Math.min((currentPage + 1) * IMAGES_PER_PAGE, uniqueImages.length);
-    setDisplayedImages(uniqueImages.slice(0, end));
-    prevCombinedLengthRef.current = uniqueImages.length;
-  }, [combinedImages, currentPage, IMAGES_PER_PAGE]);
-
-  const handleLoadMore = useCallback(() => {
-    if (isLoadingMore) return;
-    const uniqueImagesList = combinedImages.filter((img, index, arr) =>
-      arr.findIndex((item) => item._id === img._id) === index
-    );
-    const totalImages = uniqueImagesList.length;
-    const nextPage = currentPage + 1;
-    const startIndex = nextPage * IMAGES_PER_PAGE;
-    if (startIndex < totalImages) {
-      setIsLoadingMore(true);
-      setCurrentPage(nextPage);
-      setIsLoadingMore(false);
-    }
-  }, [combinedImages, currentPage, isLoadingMore, IMAGES_PER_PAGE]);
+  // Use the new simplified queries
+  const galleryImages = useQuery(api.images.getGalleryImages) || [];
+  const failedImages = useQuery(api.images.getFailedImages) || [];
+  const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
 
   // Map low-level errors to friendly, user-facing messages
   const toUserMessage = (error: unknown): string => {
@@ -135,6 +82,57 @@ function Content() {
     return "Something went wrong. Please try again.";
   };
 
+  // Consolidated upload function for both file uploads and webcam captures
+  const uploadImage = useCallback(
+    async (file: File) => {
+      setUploadError(null);
+      setIsPreparing(true);
+
+      try {
+        // Prepare image (HEIC->JPEG, compress to <=5MB)
+        const { prepareImageForUpload } = await import("@/lib/imagePrep");
+        const { file: prepared } = await prepareImageForUpload(file);
+        setIsPreparing(false);
+
+        setIsUploading(true);
+
+        // Upload to Convex storage
+        const uploadUrl = await generateUploadUrl();
+        const response = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": prepared.type },
+          body: prepared,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Upload failed: ${response.statusText}`);
+        }
+
+        const { storageId } = await response.json();
+
+        // Schedule generation using the consolidated backend mutation
+        await uploadAndScheduleGeneration({ storageId });
+
+        toast.success("Image Generation Started!", {
+          description: "Your image is being processed in the background.",
+          duration: 4000,
+        });
+
+        return true; // Success
+      } catch (error) {
+        console.error("Upload failed:", error);
+        const msg = toUserMessage(error);
+        setUploadError(msg);
+        toast.error("Upload failed", { description: msg });
+        return false; // Failed
+      } finally {
+        setIsPreparing(false);
+        setIsUploading(false);
+      }
+    },
+    [generateUploadUrl, uploadAndScheduleGeneration]
+  );
+
   const handleImageCapture = async (imageData: string) => {
     setIsCapturing(true);
     try {
@@ -142,84 +140,42 @@ function Content() {
       const blob = await response.blob();
       const rawFile = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
 
-      // Prepare (compress/downscale) webcam capture the same way as file uploads (≤5MB)
-      const { prepareImageForUpload } = await import("@/lib/imagePrep");
-      const { file } = await prepareImageForUpload(rawFile);
-
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
-      setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
-        });
-      await uploadAndSchedule(file, generateUploadUrl, scheduleFn);
-      toast.success("Upload started", {
-        description: "Your image is being processed in the background.",
-        duration: 4000,
-      });
+      // Use the consolidated upload function
+      await uploadImage(rawFile);
     } catch (error) {
-      console.error("Failed to upload captured image:", error);
-      toast.error("Upload failed", { description: toUserMessage(error) });
+      console.error("Failed to process captured image:", error);
+      toast.error("Camera capture failed", { description: toUserMessage(error) });
     } finally {
-      setIsGenerating(false);
       setIsCapturing(false);
     }
   };
 
   const retryUpload = useCallback(async () => {
-    if (!selectedImage && !preparedRef.current) return;
-    setUploadError(null);
-    setIsUploading(true);
-    try {
-      let prepared = preparedRef.current;
-      if (!prepared && selectedImage) {
-        setIsPreparing(true);
-        const { prepareImageForUpload } = await import("@/lib/imagePrep");
-        const { file } = await prepareImageForUpload(selectedImage);
-        prepared = file;
-        preparedRef.current = file;
-        setIsPreparing(false);
-      }
-      if (!prepared) throw new Error("Nothing to upload. Please reselect your file.");
+    if (!selectedImage) return;
 
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
-      setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
-        });
-      await uploadAndSchedule(prepared, generateUploadUrl, scheduleFn);
-      toast.success("Upload started", {
-        description:
-          "Your image is being processed. You can refresh the page – generation will continue in the background.",
-        duration: 4000,
-      });
+    const success = await uploadImage(selectedImage);
+    if (success) {
       // Clear selection on success
       setSelectedImage(null);
       preparedRef.current = null;
       if (imageInput.current) imageInput.current.value = "";
-    } catch (error) {
-      console.error("Retry upload failed:", error);
-      const msg = toUserMessage(error);
-      setUploadError(msg);
-      toast.error("Upload failed", { description: msg });
-    } finally {
-      setIsGenerating(false);
-      setIsUploading(false);
     }
-  }, [generateUploadUrl, scheduleImageGeneration, selectedImage]);
+  }, [selectedImage, uploadImage]);
 
-  const handleRetryFailed = useCallback(async (imageId: Id<"images">) => {
-    try {
-      await retryOriginalMutation({ imageId });
-      toast.success("Retry scheduled", {
-        description: "We queued your image for processing again.",
-      });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err || "");
-      toast.error("Retry failed", { description: msg });
-    }
-  }, [retryOriginalMutation]);
+  const handleRetryFailed = useCallback(
+    async (imageId: Id<"images">) => {
+      try {
+        await retryOriginalMutation({ imageId });
+        toast.success("Retry scheduled", {
+          description: "We queued your image for processing again.",
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err || "");
+        toast.error("Retry failed", { description: msg });
+      }
+    },
+    [retryOriginalMutation]
+  );
 
   const handleSendImage = async (event: FormEvent) => {
     event.preventDefault();
@@ -234,68 +190,12 @@ function Content() {
       return;
     }
 
-    setUploadError(null);
-    setIsPreparing(true);
-    try {
-      // Prepare image (HEIC->JPEG, compress to <=5MB)
-      const { prepareImageForUpload } = await import("@/lib/imagePrep");
-      const { file: prepared } = await prepareImageForUpload(selectedImage);
-      preparedRef.current = prepared;
-    } catch (error) {
-      console.error("Preparation failed:", error);
-      const msg = error instanceof Error ? error.message : String(error || "");
-      setUploadError(msg);
-      toast.error("Preparation failed", { description: msg });
-      setIsPreparing(false);
-      return;
-    }
-
-    setIsPreparing(false);
-    setIsUploading(true);
-    try {
-      const prepared = preparedRef.current!;
-      const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": prepared.type },
-        body: prepared,
-      });
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
-      }
-      const { storageId } = await result.json();
-      setIsGenerating(true);
-      try {
-        await scheduleImageGeneration({ storageId });
-        toast.success("Image Generation Started!", {
-          description:
-            "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
-          duration: 4000,
-        });
-        // Clear selection on success
-        setSelectedImage(null);
-        preparedRef.current = null;
-        if (imageInput.current) imageInput.current.value = "";
-      } catch (genError) {
-        const msg = genError instanceof Error ? genError.message : String(genError || "");
-        if (msg.startsWith("VALIDATION:")) {
-          toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
-        } else {
-          toast.error("Processing unavailable", {
-            description: "We couldn't start processing right now. Please try again shortly.",
-            duration: 5000,
-          });
-        }
-      } finally {
-        setIsGenerating(false);
-      }
-    } catch (error) {
-      console.error("Upload failed:", error);
-      const msg = error instanceof Error ? error.message : String(error || "");
-      setUploadError(msg);
-      toast.error("Upload failed", { description: msg });
-    } finally {
-      setIsUploading(false);
+    const success = await uploadImage(selectedImage);
+    if (success) {
+      // Clear selection on success
+      setSelectedImage(null);
+      preparedRef.current = null;
+      if (imageInput.current) imageInput.current.value = "";
     }
   };
 
@@ -328,8 +228,12 @@ function Content() {
                 <TabsTrigger value="camera" className="text-sm font-medium">
                   📸 Camera
                 </TabsTrigger>
-                <TabsTrigger value="upload" className="text-sm font-medium">📤 Upload</TabsTrigger>
-                <TabsTrigger value="failed" className="text-sm font-medium">⚠️ Failed</TabsTrigger>
+                <TabsTrigger value="upload" className="text-sm font-medium">
+                  📤 Upload
+                </TabsTrigger>
+                <TabsTrigger value="failed" className="text-sm font-medium">
+                  ⚠️ Failed
+                </TabsTrigger>
               </TabsList>
               <TabsContent value="upload" className="mt-4">
                 <form onSubmit={handleSendImage} aria-label="Upload image form">
@@ -348,7 +252,7 @@ function Content() {
                             setUploadError(null);
                             setSelectedImage(event.target.files?.[0] ?? null);
                           }}
-                          disabled={isPreparing || isUploading || isGenerating}
+                          disabled={isPreparing || isUploading}
                           className="w-full"
                         />
 
@@ -366,16 +270,14 @@ function Content() {
                             size="sm"
                             variant="outline"
                             className="w-full h-11"
-                            aria-busy={isPreparing || isUploading || isGenerating}
-                            disabled={isPreparing || isUploading || isGenerating || !selectedImage}
+                            aria-busy={isPreparing || isUploading}
+                            disabled={isPreparing || isUploading || !selectedImage}
                           >
                             {isPreparing
                               ? "Preparing..."
                               : isUploading
-                              ? "Uploading..."
-                              : isGenerating
-                              ? "Generating..."
-                              : "Upload & Generate"}
+                                ? "Uploading..."
+                                : "Upload & Generate"}
                           </Button>
                           {uploadError && (
                             <Button
@@ -384,7 +286,7 @@ function Content() {
                               size="sm"
                               variant="default"
                               className="h-11"
-                              disabled={isPreparing || isUploading || isGenerating}
+                              disabled={isPreparing || isUploading}
                             >
                               Retry upload
                             </Button>
@@ -397,7 +299,7 @@ function Content() {
               </TabsContent>
               <TabsContent value="camera" className="mt-4">
                 <div className="w-full">
-                  <Webcam onCapture={handleImageCapture} isUploading={isCapturing || isGenerating} />
+                  <Webcam onCapture={handleImageCapture} isUploading={isCapturing} />
                 </div>
               </TabsContent>
               <TabsContent value="failed" className="mt-4">
@@ -407,14 +309,20 @@ function Content() {
                   </CardHeader>
                   <CardContent>
                     {failedImages.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">No failed images. Great job!</div>
+                      <div className="text-sm text-muted-foreground">
+                        No failed images. Great job!
+                      </div>
                     ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         {failedImages.map((img) => (
                           <div key={img._id} className="border rounded-lg overflow-hidden">
                             <div className="aspect-square bg-muted relative">
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={img.url} alt="Failed" className="object-cover w-full h-full" />
+                              <img
+                                src={img.url}
+                                alt="Failed"
+                                className="object-cover w-full h-full"
+                              />
                               <div className="absolute inset-0 bg-red-600/50 flex items-center justify-center">
                                 <span className="text-white text-sm font-medium">Failed</span>
                               </div>
@@ -437,15 +345,7 @@ function Content() {
             </Tabs>
           </div>
           <div className="w-full">
-            <ImagePreview
-              images={displayedImages}
-              totalImages={combinedImages.length}
-              currentPage={currentPage}
-              imagesPerPage={IMAGES_PER_PAGE}
-              onLoadMore={handleLoadMore}
-              hasMore={displayedImages.length < combinedImages.length}
-              isLoading={isLoadingMore}
-            />
+            <ImagePreview images={galleryImages} />
           </div>
         </div>
         {hasActiveGenerations && (

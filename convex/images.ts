@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 
 export const generateUploadUrl = mutation({
@@ -9,11 +10,55 @@ export const generateUploadUrl = mutation({
   },
 });
 
+// Consolidated upload mutation - replaces scheduleImageGeneration
+export const uploadAndScheduleGeneration = mutation({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  returns: v.id("images"),
+  handler: async (ctx, args) => {
+    const { storageId } = args;
+
+    // Validate file metadata (size/type) before inserting
+    const meta = await ctx.db.system.get(storageId);
+    if (!meta) throw new Error("VALIDATION: Missing storage metadata");
+
+    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
+    const contentType: string | undefined = (meta as { contentType?: string }).contentType;
+    const size: number | undefined = (meta as { size?: number }).size;
+
+    if (!contentType || !allowed.has(contentType)) {
+      throw new Error("VALIDATION: Unsupported content type");
+    }
+    if (typeof size === "number" && size > 5 * 1024 * 1024) {
+      throw new Error("VALIDATION: File exceeds 5 MB limit");
+    }
+
+    // Create the original image record with pending status
+    const originalImageId = await ctx.db.insert("images", {
+      body: storageId,
+      createdAt: Date.now(),
+      isGenerated: false,
+      generationStatus: "pending" as const,
+      generationAttempts: 0,
+    });
+
+    // Schedule the image generation immediately
+    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
+      storageId,
+      originalImageId,
+      contentType,
+    });
+
+    return originalImageId;
+  },
+});
+
 export const sendImage = mutation({
   args: {
     storageId: v.id("_storage"),
     isGenerated: v.optional(v.boolean()),
-    originalImageId: v.optional(v.string()),
+    originalImageId: v.optional(v.id("images")),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
@@ -26,17 +71,25 @@ export const sendImage = mutation({
   },
 });
 
-export const getImages = query({
+// Get all images for gallery display (pending/processing originals + completed generated)
+export const getGalleryImages = query({
   args: {},
   returns: v.array(
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      body: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
@@ -45,14 +98,165 @@ export const getImages = query({
     })
   ),
   handler: async (ctx) => {
+    // Get all images ordered by creation time (newest first)
     const images = await ctx.db.query("images").order("desc").collect();
+
+    // Filter for gallery display:
+    // - Include originals that are pending/processing (placeholders)
+    // - Include all generated images (completed results)
+    // - Exclude failed originals (these go in failed tab only)
+    const galleryImages = images.filter((img) => {
+      if (img.isGenerated) {
+        return true; // Show all generated images
+      }
+      // For originals, only show pending/processing (not failed)
+      return img.generationStatus === "pending" || img.generationStatus === "processing";
+    });
 
     // Generate URLs for each image
     const imagesWithUrls = await Promise.all(
-      images.map(async (image) => ({
-        ...image,
-        url: await ctx.storage.getUrl(image.body),
-      }))
+      galleryImages.map(async (image) => {
+        const url = await ctx.storage.getUrl(image.body);
+        return {
+          ...image,
+          url,
+        };
+      })
+    );
+
+    // Filter out images without URLs and assert type
+    return imagesWithUrls.filter(
+      (image): image is typeof image & { url: string } => image.url !== null
+    );
+  },
+});
+
+// Get failed images for the Failed tab
+export const getFailedImages = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("images"),
+      _creationTime: v.number(),
+      body: v.id("_storage"),
+      createdAt: v.number(),
+      isGenerated: v.optional(v.boolean()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
+      generationError: v.optional(v.string()),
+      generationAttempts: v.optional(v.number()),
+      sharingEnabled: v.optional(v.boolean()),
+      shareExpiresAt: v.optional(v.number()),
+      url: v.string(),
+    })
+  ),
+  handler: async (ctx) => {
+    // Get failed originals only
+    const failedImages = await ctx.db
+      .query("images")
+      .withIndex("by_is_generated_and_status")
+      .filter((q) =>
+        q.and(q.eq(q.field("isGenerated"), false), q.eq(q.field("generationStatus"), "failed"))
+      )
+      .order("desc")
+      .collect();
+
+    // Generate URLs for each image
+    const imagesWithUrls = await Promise.all(
+      failedImages.map(async (image) => {
+        const url = await ctx.storage.getUrl(image.body);
+        return {
+          ...image,
+          url,
+        };
+      })
+    );
+
+    // Filter out images without URLs and assert type
+    return imagesWithUrls.filter(
+      (image): image is typeof image & { url: string } => image.url !== null
+    );
+  },
+});
+
+// Check if any generation is active
+export const hasActiveGenerations = query({
+  args: {},
+  returns: v.boolean(),
+  handler: async (ctx) => {
+    const activeCount = await ctx.db
+      .query("images")
+      .withIndex("by_generation_status")
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("generationStatus"), "pending"),
+          q.eq(q.field("generationStatus"), "processing")
+        )
+      )
+      .collect();
+
+    return activeCount.length > 0;
+  },
+});
+
+// Legacy function for backward compatibility - same as getGalleryImages
+export const getImages = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("images"),
+      _creationTime: v.number(),
+      body: v.id("_storage"),
+      createdAt: v.number(),
+      isGenerated: v.optional(v.boolean()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
+      generationError: v.optional(v.string()),
+      generationAttempts: v.optional(v.number()),
+      sharingEnabled: v.optional(v.boolean()),
+      shareExpiresAt: v.optional(v.number()),
+      url: v.string(),
+    })
+  ),
+  handler: async (ctx) => {
+    // Get all images ordered by creation time (newest first)
+    const images = await ctx.db.query("images").order("desc").collect();
+
+    // Filter for gallery display:
+    // - Include originals that are pending/processing (placeholders)
+    // - Include all generated images (completed results)
+    // - Exclude failed originals (these go in failed tab only)
+    const galleryImages = images.filter((img) => {
+      if (img.isGenerated) {
+        return true; // Show all generated images
+      }
+      // For originals, only show pending/processing (not failed)
+      return img.generationStatus === "pending" || img.generationStatus === "processing";
+    });
+
+    // Generate URLs for each image
+    const imagesWithUrls = await Promise.all(
+      galleryImages.map(async (image) => {
+        const url = await ctx.storage.getUrl(image.body);
+        return {
+          ...image,
+          url,
+        };
+      })
     );
 
     // Filter out images without URLs and assert type
@@ -68,11 +272,18 @@ export const getImageById = query({
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      body: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),

@@ -1,8 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { internalAction, mutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { internalAction, mutation } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -38,14 +38,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export const updateImageStatus = mutation({
   args: {
     imageId: v.id("images"),
-    status: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
     error: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
     const updateData: {
-      generationStatus: string;
+      generationStatus: "pending" | "processing" | "completed" | "failed";
       generationError?: string;
     } = { generationStatus: status };
     if (error) {
@@ -53,6 +59,7 @@ export const updateImageStatus = mutation({
     }
 
     await ctx.db.patch(imageId, updateData);
+    return null;
   },
 });
 
@@ -77,51 +84,6 @@ export const saveGeneratedImage = mutation({
   },
 });
 
-/**
- * Schedule image generation (call this from your upload functions)
- */
-export const scheduleImageGeneration = mutation({
-  args: {
-    storageId: v.id("_storage"),
-  },
-  handler: async (ctx, args) => {
-    const { storageId } = args;
-
-    // Validate file metadata (size/type) before inserting
-    const meta = await ctx.db.system.get(storageId);
-    if (!meta) throw new Error("VALIDATION: Missing storage metadata");
-
-    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
-    const contentType: string | undefined = (meta as { contentType?: string }).contentType;
-    const size: number | undefined = (meta as { size?: number }).size;
-
-    if (!contentType || !allowed.has(contentType)) {
-      throw new Error("VALIDATION: Unsupported content type");
-    }
-    if (typeof size === "number" && size > 5 * 1024 * 1024) {
-      throw new Error("VALIDATION: File exceeds 5 MB limit");
-    }
-
-    // First, save the original image with pending status
-    const originalImageId = await ctx.db.insert("images", {
-      body: storageId,
-      createdAt: Date.now(),
-      isGenerated: false,
-      generationStatus: "pending",
-      generationAttempts: 0,
-    });
-
-    // Schedule the image generation to run immediately, passing through the validated contentType
-    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
-      storageId,
-      originalImageId,
-      contentType,
-    });
-
-    return originalImageId;
-  },
-});
-
 // Auto-retry once when generation fails.
 export const maybeRetryOnce = mutation({
   args: { imageId: v.id("images") },
@@ -136,7 +98,8 @@ export const maybeRetryOnce = mutation({
       await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
       const storageId = img.body as unknown as Id<"_storage">;
       const meta = await ctx.db.system.get(storageId);
-      const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
+      const contentType: string | undefined = (meta as { contentType?: string } | null)
+        ?.contentType;
       await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
         storageId,
         originalImageId: imageId,
@@ -175,6 +138,7 @@ export const generateImage = internalAction({
     originalImageId: v.id("images"),
     contentType: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { storageId, originalImageId, contentType } = args;
 
@@ -182,26 +146,17 @@ export const generateImage = internalAction({
       `[generateImage] Using Gemini 2.5 Flash Image Preview with storageId: ${storageId}, originalImageId: ${originalImageId}`
     );
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      console.error("GEMINI_API_KEY or GOOGLE_GENAI_API_KEY is not set");
-      // Mark the original image as having failed generation
-      await ctx.runMutation(api.generate.updateImageStatus, {
-        imageId: originalImageId,
-        status: "failed",
-        error: "API key not configured",
-      });
-      return;
-    }
-
     try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        throw new Error("API key not configured");
+      }
+
       // Mark the original image as being processed
       await ctx.runMutation(api.generate.updateImageStatus, {
         imageId: originalImageId,
         status: "processing",
       });
-
-      const ai = new GoogleGenAI({ apiKey });
 
       // Get the URL from storage ID
       const baseImageUrl = await ctx.storage.getUrl(storageId);
@@ -214,11 +169,14 @@ export const generateImage = internalAction({
       if (!response.ok) {
         throw new Error(`Failed to fetch uploaded image from storage: ${response.statusText}`);
       }
+
       // Prefer validated contentType captured at scheduling time; fall back to response header; default to image/jpeg
       const headerType = response.headers.get("content-type") || undefined;
       const mimeType = contentType || headerType || "image/jpeg";
       const arrayBuffer = await response.arrayBuffer();
       const base64Image = arrayBufferToBase64(arrayBuffer);
+
+      const ai = new GoogleGenAI({ apiKey });
 
       // Follow the official SDK example: text + inlineData parts
       const contents = [
@@ -273,12 +231,14 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         text?: string;
         inlineData?: { mimeType?: string; data?: string };
       }> = candidates[0].content?.parts ?? [];
+
       for (const part of parts) {
         if (part.inlineData?.data) {
           b64Out = part.inlineData.data;
           break;
         }
       }
+
       if (!b64Out) {
         throw new Error("Gemini response did not include image data");
       }
@@ -287,8 +247,9 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       const imageBuffer = base64ToUint8Array(b64Out);
       const imageBlob = new Blob([imageBuffer as BlobPart], { type: "image/png" });
       const generatedStorageId = await ctx.storage.store(imageBlob);
-      const url = await ctx.storage.getUrl(generatedStorageId);
 
+      // Verify the generated image was stored properly
+      const url = await ctx.storage.getUrl(generatedStorageId);
       if (!url) {
         throw new Error("Failed to get storage URL after upload");
       }
@@ -311,7 +272,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
     } catch (error) {
       console.error(`[generateImage] Failed to generate image:`, error);
 
-      // Mark the original image as failed with more detailed error info
+      // Always ensure we update the status to failed if processing was started
       const errorMessage =
         error instanceof Error ? error.message : "Unknown error occurred during generation";
 
@@ -323,21 +284,38 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
       } catch (updateError) {
-        console.error(`[generateImage] Failed to update image status:`, updateError);
-        // Even if status update fails, log the original error
+        console.error(
+          `[generateImage] CRITICAL: Failed to update image status to failed:`,
+          updateError
+        );
         console.error(`[generateImage] Original generation error: ${errorMessage}`);
+        // This is critical - if we can't update status, the image will be stuck as "processing"
       }
 
-      // Auto-retry once via mutation that increments attempts and reschedules
-      try {
-        const retried = await ctx.runMutation(api.generate.maybeRetryOnce, { imageId: originalImageId });
-        if (retried) {
-          console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
-          return;
+      // Only auto-retry if this wasn't an API key or fundamental configuration error
+      const shouldRetry =
+        !errorMessage.includes("API key") &&
+        !errorMessage.includes("not configured") &&
+        !errorMessage.includes("Missing storage metadata");
+
+      if (shouldRetry) {
+        try {
+          const retried = await ctx.runMutation(api.generate.maybeRetryOnce, {
+            imageId: originalImageId,
+          });
+          if (retried) {
+            console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
+          }
+        } catch (retryError) {
+          console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
         }
-      } catch (retryError) {
-        console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
+      } else {
+        console.log(
+          `[generateImage] Skipping auto-retry for ${originalImageId} due to configuration error`
+        );
       }
     }
+
+    return null;
   },
 });
