@@ -38,14 +38,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export const updateImageStatus = mutation({
   args: {
     imageId: v.id("images"),
-    status: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
     error: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
     const updateData: {
-      generationStatus: string;
+      generationStatus: "pending" | "processing" | "completed" | "failed";
       generationError?: string;
     } = { generationStatus: status };
     if (error) {
@@ -53,6 +59,7 @@ export const updateImageStatus = mutation({
     }
 
     await ctx.db.patch(imageId, updateData);
+    return null;
   },
 });
 
@@ -64,6 +71,7 @@ export const saveGeneratedImage = mutation({
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId, originalImageId } = args;
 
@@ -84,6 +92,7 @@ export const scheduleImageGeneration = mutation({
   args: {
     storageId: v.id("_storage"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId } = args;
 
@@ -175,6 +184,7 @@ export const generateImage = internalAction({
     originalImageId: v.id("images"),
     contentType: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { storageId, originalImageId, contentType } = args;
 
@@ -308,6 +318,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       console.log(
         `[generateImage] Successfully generated image for originalImageId: ${originalImageId}`
       );
+      return null;
     } catch (error) {
       console.error(`[generateImage] Failed to generate image:`, error);
 
@@ -338,6 +349,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       } catch (retryError) {
         console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
       }
+      return null;
     }
   },
 });

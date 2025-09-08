@@ -13,7 +13,7 @@ export const sendImage = mutation({
   args: {
     storageId: v.id("_storage"),
     isGenerated: v.optional(v.boolean()),
-    originalImageId: v.optional(v.string()),
+    originalImageId: v.optional(v.id("images")),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
@@ -32,11 +32,18 @@ export const getImages = query({
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      body: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
@@ -68,11 +75,18 @@ export const getImageById = query({
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      body: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),

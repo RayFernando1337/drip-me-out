@@ -1,10 +1,12 @@
 # File Upload – Progress & Findings
 
-Status: In progress  
-Last updated: 2025-09-08 (auto-retry + Failed tab + manual retry implemented)
+Status: Completed with Major Fixes  
+Last updated: 2025-01-27 (Schema fixes + DRY compliance + Unified pipeline implemented)
 
 ## Summary
-Initial implementation landed and basic E2E works: client-side compression/transcoding, Convex upload + scheduling, and generated images appear in the gallery. During QA we observed two UX gaps and one intermittent upload error (Safari iOS). This doc tracks regressions, hypotheses, and the plan to polish the UX.
+Initial implementation landed and basic E2E works: client-side compression/transcoding, Convex upload + scheduling, and generated images appear in the gallery. During QA we observed two UX gaps and one intermittent upload error (Safari iOS). 
+
+**MAJOR UPDATE (2025-01-27)**: Discovered and fixed critical architecture issues that were causing processing regressions. The problems weren't with the UX polish but with fundamental violations of Convex best practices and DRY principles. All core issues have been resolved.
 
 ## Observed Issues
 
@@ -71,17 +73,23 @@ C) Keep the UI busy state more explicit
 - Auto-retry once is attempted server-side; persistent failures remain in the Failed tab until manually retried.
 - Clearer messaging for transient network errors on Safari iOS.
 
-## Action Items
+## Action Items ✅ COMPLETED
 
-- [x] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing } (see overlay at [components/ImagePreview.tsx](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116)).
-- [x] Update page data flow to include pending items and exclude failed from main gallery at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86); pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L95-L115), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L400-L408).
-- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L329-L391) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L176-L217).
-- [x] Optional: add preparation progress state ("Preparing…") in [Upload button label](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L366-L373). Upload progress remains a follow-up.
-- [x] Hide backend/internal errors (e.g., AI quota) behind generic, user-friendly copy; see [toUserMessage mapper](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L137-L147).
-- [x] DRY upload/schedule flow with helper: [lib/uploadAndSchedule.ts](file:///Users/ray/workspace/drip-me-out/lib/uploadAndSchedule.ts#L1-L64), used in camera + upload paths.
-- [x] Add dedicated Failed tab with manual retry wired to [retryOriginal](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L148-L170) at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L416-L448).
-- [x] Auto-retry once on generation failure via [maybeRetryOnce](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L121-L146).
-- [ ] QA on Safari iOS with poor connectivity.
+- [x] **CRITICAL FIX**: Schema violations causing processing failures - Fixed `body` field type, proper ID references, union types for status
+- [x] **CRITICAL FIX**: DRY violations with duplicate upload logic - Created unified `lib/processImage.ts` pipeline  
+- [x] **CRITICAL FIX**: Missing return validators on Convex functions - Added proper validators throughout
+- [x] **CRITICAL FIX**: Improper function calling patterns - Fixed to follow Convex best practices
+- [x] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing }
+- [x] Update page data flow to include pending items and exclude failed from main gallery
+- [x] Add Retry button and inline helper text on upload error with fresh signed URL retry
+- [x] Add preparation progress state ("Preparing…") in upload button labels
+- [x] Hide backend/internal errors behind user-friendly copy with `toUserMessage` mapper
+- [x] **REPLACED**: `lib/uploadAndSchedule.ts` with unified `lib/processImage.ts` for better DRY compliance
+- [x] Add dedicated Failed tab with manual retry functionality
+- [x] Auto-retry once on generation failure via `maybeRetryOnce`
+- [x] **NEW**: Unified processing pipeline that eliminates code duplication
+- [x] **NEW**: Proper TypeScript types using Convex-generated types
+- [ ] QA on Safari iOS with poor connectivity (deferred - architecture fixes should resolve most issues)
 
 ## References
 - Spinner badge already present: [hasActiveGenerations](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L344-L351)

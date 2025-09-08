@@ -157,25 +157,31 @@ function Content() {
   const handleImageCapture = async (imageData: string) => {
     setIsCapturing(true);
     try {
-      const response = await fetch(imageData);
-      const blob = await response.blob();
-      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
-
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
+      const { processCameraCapture } = await import("@/lib/processImage");
       setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
-        });
-      await uploadAndSchedule(file, generateUploadUrl, scheduleFn);
-      toast.success("Upload started", {
-        description: "Your image is being processed in the background.",
-        duration: 4000,
+      
+      const result = await processCameraCapture(imageData, {
+        generateUploadUrl,
+        scheduleImageGeneration,
+        successMessage: "Camera capture started",
+        onSuccess: () => {
+          setIsGenerating(false);
+          setIsCapturing(false);
+        },
+        onError: (error) => {
+          console.error("Failed to upload captured image:", error);
+          setIsGenerating(false);
+          setIsCapturing(false);
+        }
       });
+
+      if (!result.success) {
+        setIsGenerating(false);
+        setIsCapturing(false);
+      }
     } catch (error) {
-      console.error("Failed to upload captured image:", error);
-      toast.error("Upload failed", { description: toUserMessage(error) });
-    } finally {
+      console.error("Failed to process camera capture:", error);
+      toast.error("Camera capture failed", { description: toUserMessage(error) });
       setIsGenerating(false);
       setIsCapturing(false);
     }
@@ -185,34 +191,60 @@ function Content() {
     if (!selectedImage && !preparedRef.current) return;
     setUploadError(null);
     setIsUploading(true);
+    
     try {
-      let prepared = preparedRef.current;
-      if (!prepared && selectedImage) {
-        setIsPreparing(true);
-        const { prepareImageForUpload } = await import("@/lib/imagePrep");
-        const { file } = await prepareImageForUpload(selectedImage);
-        prepared = file;
-        preparedRef.current = file;
-        setIsPreparing(false);
-      }
-      if (!prepared) throw new Error("Nothing to upload. Please reselect your file.");
-
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
-      setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
+      const fileToUpload = preparedRef.current;
+      
+      if (!fileToUpload && selectedImage) {
+        // Need to prepare the file
+        const { processFileUpload } = await import("@/lib/processImage");
+        await processFileUpload(selectedImage, {
+          shouldPrepare: true,
+          generateUploadUrl,
+          scheduleImageGeneration,
+          successMessage: "File upload started",
+          onPrepareStart: () => setIsPreparing(true),
+          onPrepareEnd: () => setIsPreparing(false),
+          onSuccess: () => {
+            // Clear selection on success
+            setSelectedImage(null);
+            preparedRef.current = null;
+            if (imageInput.current) imageInput.current.value = "";
+            setIsUploading(false);
+            setIsGenerating(false);
+          },
+          onError: (error) => {
+            const msg = toUserMessage(error);
+            setUploadError(msg);
+            setIsUploading(false);
+            setIsGenerating(false);
+          }
         });
-      await uploadAndSchedule(prepared, generateUploadUrl, scheduleFn);
-      toast.success("Upload started", {
-        description:
-          "Your image is being processed. You can refresh the page – generation will continue in the background.",
-        duration: 4000,
+        
+        return;
+      }
+      
+      if (!fileToUpload) throw new Error("Nothing to upload. Please reselect your file.");
+
+      // Upload already prepared file
+      const { processImage } = await import("@/lib/processImage");
+      setIsGenerating(true);
+      
+      await processImage(fileToUpload, {
+        generateUploadUrl,
+        scheduleImageGeneration,
+        successMessage: "Retry upload started",
+        onSuccess: () => {
+          // Clear selection on success
+          setSelectedImage(null);
+          preparedRef.current = null;
+          if (imageInput.current) imageInput.current.value = "";
+        },
+        onError: (error) => {
+          const msg = toUserMessage(error);
+          setUploadError(msg);
+        }
       });
-      // Clear selection on success
-      setSelectedImage(null);
-      preparedRef.current = null;
-      if (imageInput.current) imageInput.current.value = "";
     } catch (error) {
       console.error("Retry upload failed:", error);
       const msg = toUserMessage(error);
@@ -240,77 +272,43 @@ function Content() {
     event.preventDefault();
     if (!selectedImage) return;
 
-    // Client-side validation of type
-    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
-    if (!allowed.has(selectedImage.type)) {
-      toast.error("Unsupported file type", {
-        description: "Please choose a JPEG, PNG, or HEIC/HEIF image.",
-      });
-      return;
-    }
-
     setUploadError(null);
-    setIsPreparing(true);
-    try {
-      // Prepare image (HEIC->JPEG, compress to <=5MB)
-      const { prepareImageForUpload } = await import("@/lib/imagePrep");
-      const { file: prepared } = await prepareImageForUpload(selectedImage);
-      preparedRef.current = prepared;
-    } catch (error) {
-      console.error("Preparation failed:", error);
-      const msg = error instanceof Error ? error.message : String(error || "");
-      setUploadError(msg);
-      toast.error("Preparation failed", { description: msg });
-      setIsPreparing(false);
-      return;
-    }
-
-    setIsPreparing(false);
     setIsUploading(true);
+    
     try {
-      const prepared = preparedRef.current!;
-      const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": prepared.type },
-        body: prepared,
-      });
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
-      }
-      const { storageId } = await result.json();
+      const { processFileUpload } = await import("@/lib/processImage");
       setIsGenerating(true);
-      try {
-        await scheduleImageGeneration({ storageId });
-        toast.success("Image Generation Started!", {
-          description:
-            "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
-          duration: 4000,
-        });
-        // Clear selection on success
-        setSelectedImage(null);
-        preparedRef.current = null;
-        if (imageInput.current) imageInput.current.value = "";
-      } catch (genError) {
-        const msg = genError instanceof Error ? genError.message : String(genError || "");
-        if (msg.startsWith("VALIDATION:")) {
-          toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
-        } else {
-          toast.error("Processing unavailable", {
-            description: "We couldn't start processing right now. Please try again shortly.",
-            duration: 5000,
-          });
+      
+      await processFileUpload(selectedImage, {
+        shouldPrepare: true,
+        generateUploadUrl,
+        scheduleImageGeneration,
+        successMessage: "Image Generation Started!",
+        onPrepareStart: () => setIsPreparing(true),
+        onPrepareEnd: () => setIsPreparing(false),
+        onSuccess: () => {
+          // Clear selection on success
+          setSelectedImage(null);
+          preparedRef.current = null;
+          if (imageInput.current) imageInput.current.value = "";
+          setIsUploading(false);
+          setIsGenerating(false);
+        },
+        onError: (error) => {
+          console.error("Upload failed:", error);
+          const msg = toUserMessage(error);
+          setUploadError(msg);
+          setIsUploading(false);
+          setIsGenerating(false);
         }
-      } finally {
-        setIsGenerating(false);
-      }
+      });
     } catch (error) {
-      console.error("Upload failed:", error);
-      const msg = error instanceof Error ? error.message : String(error || "");
+      console.error("File upload failed:", error);
+      const msg = toUserMessage(error);
       setUploadError(msg);
       toast.error("Upload failed", { description: msg });
-    } finally {
       setIsUploading(false);
+      setIsGenerating(false);
     }
   };
 
