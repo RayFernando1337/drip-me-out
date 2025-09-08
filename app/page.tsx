@@ -96,27 +96,16 @@ function Content() {
     return images.filter((img) => !img.isGenerated && img.generationStatus === "failed");
   }, [images]);
 
+  // Keep displayed images in sync with live updates (status changes) and pagination
   useEffect(() => {
-    const currentLength = combinedImages.length;
-    if (currentLength !== prevCombinedLengthRef.current) {
-      const uniqueImages = combinedImages.filter((img, index, arr) =>
-        arr.findIndex((item) => item._id === img._id) === index
-      );
-      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
-      setCurrentPage(0);
-      prevCombinedLengthRef.current = currentLength;
-    }
-  }, [combinedImages]);
-
-  useEffect(() => {
-    if (combinedImages.length > 0 && displayedImages.length === 0) {
-      const uniqueImages = combinedImages.filter((img, index, arr) =>
-        arr.findIndex((item) => item._id === img._id) === index
-      );
-      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
-      setCurrentPage(0);
-    }
-  }, [combinedImages.length, displayedImages.length, combinedImages]);
+    const uniqueImages = combinedImages.filter((img, index, arr) =>
+      arr.findIndex((item) => item._id === img._id) === index
+    );
+    // Show pages 0..currentPage inclusive
+    const end = Math.min((currentPage + 1) * IMAGES_PER_PAGE, uniqueImages.length);
+    setDisplayedImages(uniqueImages.slice(0, end));
+    prevCombinedLengthRef.current = uniqueImages.length;
+  }, [combinedImages, currentPage, IMAGES_PER_PAGE]);
 
   const handleLoadMore = useCallback(() => {
     if (isLoadingMore) return;
@@ -126,20 +115,12 @@ function Content() {
     const totalImages = uniqueImagesList.length;
     const nextPage = currentPage + 1;
     const startIndex = nextPage * IMAGES_PER_PAGE;
-    const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
     if (startIndex < totalImages) {
       setIsLoadingMore(true);
-      const newImages = uniqueImagesList.slice(startIndex, endIndex);
-      setDisplayedImages((prev) => {
-        const combined = [...prev, ...newImages];
-        return combined.filter((img, index, arr) =>
-          arr.findIndex((item) => item._id === img._id) === index
-        );
-      });
       setCurrentPage(nextPage);
       setIsLoadingMore(false);
     }
-  }, [combinedImages, currentPage, isLoadingMore]);
+  }, [combinedImages, currentPage, isLoadingMore, IMAGES_PER_PAGE]);
 
   // Map low-level errors to friendly, user-facing messages
   const toUserMessage = (error: unknown): string => {
@@ -159,7 +140,11 @@ function Content() {
     try {
       const response = await fetch(imageData);
       const blob = await response.blob();
-      const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
+      const rawFile = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
+
+      // Prepare (compress/downscale) webcam capture the same way as file uploads (≤5MB)
+      const { prepareImageForUpload } = await import("@/lib/imagePrep");
+      const { file } = await prepareImageForUpload(rawFile);
 
       const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
       setIsGenerating(true);
