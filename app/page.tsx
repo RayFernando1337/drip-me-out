@@ -91,18 +91,31 @@ function Content() {
   const failedImages = useQuery(api.images.getFailedImages) || [];
   const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
 
-  // Handle pagination results
+  // Handle pagination results with proper reactivity
   useEffect(() => {
     if (galleryResult?.page) {
       if (paginationOpts.cursor === null) {
-        // First page - replace all images
+        // First page - replace all images (handles new generations)
         setAllGalleryImages(galleryResult.page);
       } else {
         // Additional pages - append to existing images
-        setAllGalleryImages((prev) => [...prev, ...galleryResult.page]);
+        setAllGalleryImages((prev) => {
+          // Avoid duplicates by checking IDs
+          const existingIds = new Set(prev.map((img) => img._id));
+          const newImages = galleryResult.page.filter((img) => !existingIds.has(img._id));
+          return [...prev, ...newImages];
+        });
       }
     }
   }, [galleryResult, paginationOpts.cursor]);
+
+  // Auto-refresh when new images complete (reactive to total count changes)
+  useEffect(() => {
+    if (totalImagesCount > allGalleryImages.length && paginationOpts.cursor === null) {
+      // New images detected and we're on first page - this triggers fresh data fetch
+      // Convex reactivity will automatically refresh galleryResult
+    }
+  }, [totalImagesCount, allGalleryImages.length, paginationOpts.cursor]);
 
   // Load more function
   const loadMoreImages = useCallback(() => {

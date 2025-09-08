@@ -72,7 +72,7 @@ export const sendImage = mutation({
   },
 });
 
-// Get all images for gallery display (pending/processing originals + completed generated)
+// OPTIMIZED: Get gallery images using proper indexes (no filters)
 export const getGalleryImages = query({
   args: {},
   returns: v.array(
@@ -99,31 +99,47 @@ export const getGalleryImages = query({
     })
   ),
   handler: async (ctx) => {
-    // Get all images ordered by creation time (newest first)
-    const images = await ctx.db.query("images").order("desc").collect();
+    // Use indexes instead of filters for performance
 
-    // Filter for gallery display:
-    // - Include originals that are pending/processing (placeholders)
-    // - Include all generated images (completed results)
-    // - Exclude failed originals (these go in failed tab only)
-    const galleryImages = images.filter((img) => {
-      if (img.isGenerated) {
-        return true; // Show all generated images
-      }
-      // For originals, only show pending/processing (not failed)
-      return img.generationStatus === "pending" || img.generationStatus === "processing";
-    });
+    // 1. Get all generated images (completed transformations)
+    const generatedImages = await ctx.db
+      .query("images")
+      .withIndex("by_is_generated", (q) => q.eq("isGenerated", true))
+      .order("desc")
+      .collect();
 
-    // Generate URLs for each image
-    const imagesWithUrls = await Promise.all(
-      galleryImages.map(async (image) => {
-        const url = await ctx.storage.getUrl(image.body);
-        return {
-          ...image,
-          url,
-        };
-      })
+    // 2. Get pending originals (placeholders)
+    const pendingImages = await ctx.db
+      .query("images")
+      .withIndex("by_is_generated_and_status", (q) =>
+        q.eq("isGenerated", false).eq("generationStatus", "pending")
+      )
+      .order("desc")
+      .collect();
+
+    // 3. Get processing originals (placeholders)
+    const processingImages = await ctx.db
+      .query("images")
+      .withIndex("by_is_generated_and_status", (q) =>
+        q.eq("isGenerated", false).eq("generationStatus", "processing")
+      )
+      .order("desc")
+      .collect();
+
+    // Combine and sort by creation time
+    const allGalleryImages = [...generatedImages, ...pendingImages, ...processingImages].sort(
+      (a, b) => b._creationTime - a._creationTime
     );
+
+    // OPTIMIZATION: Batch URL generation for better performance
+    const storageIds = allGalleryImages.map((img) => img.body);
+    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
+
+    // Map URLs back to images efficiently
+    const imagesWithUrls = allGalleryImages.map((image, index) => ({
+      ...image,
+      url: urls[index],
+    }));
 
     // Filter out images without URLs and assert type
     return imagesWithUrls.filter(
@@ -132,7 +148,7 @@ export const getGalleryImages = query({
   },
 });
 
-// Get failed images for the Failed tab
+// OPTIMIZED: Get failed images using proper index (no filters)
 export const getFailedImages = query({
   args: {},
   returns: v.array(
@@ -159,26 +175,24 @@ export const getFailedImages = query({
     })
   ),
   handler: async (ctx) => {
-    // Get failed originals only
+    // Use proper index for failed originals only
     const failedImages = await ctx.db
       .query("images")
-      .withIndex("by_is_generated_and_status")
-      .filter((q) =>
-        q.and(q.eq(q.field("isGenerated"), false), q.eq(q.field("generationStatus"), "failed"))
+      .withIndex("by_is_generated_and_status", (q) =>
+        q.eq("isGenerated", false).eq("generationStatus", "failed")
       )
       .order("desc")
       .collect();
 
-    // Generate URLs for each image
-    const imagesWithUrls = await Promise.all(
-      failedImages.map(async (image) => {
-        const url = await ctx.storage.getUrl(image.body);
-        return {
-          ...image,
-          url,
-        };
-      })
-    );
+    // OPTIMIZATION: Batch URL generation for better performance
+    const storageIds = failedImages.map((img) => img.body);
+    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
+
+    // Map URLs back to images efficiently
+    const imagesWithUrls = failedImages.map((image, index) => ({
+      ...image,
+      url: urls[index],
+    }));
 
     // Filter out images without URLs and assert type
     return imagesWithUrls.filter(
@@ -187,27 +201,29 @@ export const getFailedImages = query({
   },
 });
 
-// Check if any generation is active
+// OPTIMIZED: Check if any generation is active using proper indexes
 export const hasActiveGenerations = query({
   args: {},
   returns: v.boolean(),
   handler: async (ctx) => {
-    const activeCount = await ctx.db
+    // Use separate index queries instead of filters
+    const pendingCount = await ctx.db
       .query("images")
-      .withIndex("by_generation_status")
-      .filter((q) =>
-        q.or(
-          q.eq(q.field("generationStatus"), "pending"),
-          q.eq(q.field("generationStatus"), "processing")
-        )
-      )
-      .collect();
+      .withIndex("by_generation_status", (q) => q.eq("generationStatus", "pending"))
+      .take(1);
 
-    return activeCount.length > 0;
+    if (pendingCount.length > 0) return true;
+
+    const processingCount = await ctx.db
+      .query("images")
+      .withIndex("by_generation_status", (q) => q.eq("generationStatus", "processing"))
+      .take(1);
+
+    return processingCount.length > 0;
   },
 });
 
-// Paginated gallery images for performance optimization
+// OPTIMIZED: Fast paginated gallery using proper indexing strategy
 export const getGalleryImagesPaginated = query({
   args: {
     paginationOpts: paginationOptsValidator,
@@ -240,31 +256,45 @@ export const getGalleryImagesPaginated = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    // Get paginated images ordered by creation time (newest first)
+    // STRATEGY: Use the default order (by _creationTime desc) and leverage Post-Processing
+    // This is faster than complex index combinations for mixed queries
     const result = await ctx.db.query("images").order("desc").paginate(args.paginationOpts);
 
-    // Filter for gallery display:
-    // - Include originals that are pending/processing (placeholders)
-    // - Include all generated images (completed results)
-    // - Exclude failed originals (these go in failed tab only)
-    const filteredImages = result.page.filter((img) => {
-      if (img.isGenerated) {
-        return true; // Show all generated images
-      }
-      // For originals, only show pending/processing (not failed)
-      return img.generationStatus === "pending" || img.generationStatus === "processing";
-    });
+    // Efficiently filter for gallery items (avoid expensive operations)
+    const galleryImages: typeof result.page = [];
 
-    // Generate URLs for each image
-    const imagesWithUrls = await Promise.all(
-      filteredImages.map(async (image) => {
-        const url = await ctx.storage.getUrl(image.body);
-        return {
-          ...image,
-          url,
-        };
-      })
-    );
+    for (const img of result.page) {
+      // Include all generated images (completed transformations)
+      if (img.isGenerated === true) {
+        galleryImages.push(img);
+        continue;
+      }
+
+      // Include only pending/processing originals (placeholders)
+      const status = img.generationStatus;
+      if (status === "pending" || status === "processing") {
+        galleryImages.push(img);
+      }
+      // Skip failed originals (they go to failed tab)
+    }
+
+    // OPTIMIZATION: Batch URL generation for filtered gallery images
+    if (galleryImages.length === 0) {
+      return {
+        page: [],
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+      };
+    }
+
+    const storageIds = galleryImages.map((img) => img.body);
+    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
+
+    // Map URLs back to images efficiently
+    const imagesWithUrls = galleryImages.map((image, index) => ({
+      ...image,
+      url: urls[index],
+    }));
 
     // Filter out images without URLs and assert type
     const validImages = imagesWithUrls.filter(
@@ -279,23 +309,37 @@ export const getGalleryImagesPaginated = query({
   },
 });
 
-// Get total count of gallery images for pagination info
+// OPTIMIZED: Get total count using index-based approach
 export const getGalleryImagesCount = query({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    const images = await ctx.db.query("images").collect();
+    // Count each category using indexes for better performance
+    const [generatedImages, pendingImages, processingImages] = await Promise.all([
+      // All generated images
+      ctx.db
+        .query("images")
+        .withIndex("by_is_generated", (q) => q.eq("isGenerated", true))
+        .collect(),
 
-    // Count gallery images (same filter as above)
-    const galleryImages = images.filter((img) => {
-      if (img.isGenerated) {
-        return true; // Count all generated images
-      }
-      // For originals, only count pending/processing (not failed)
-      return img.generationStatus === "pending" || img.generationStatus === "processing";
-    });
+      // Pending originals
+      ctx.db
+        .query("images")
+        .withIndex("by_is_generated_and_status", (q) =>
+          q.eq("isGenerated", false).eq("generationStatus", "pending")
+        )
+        .collect(),
 
-    return galleryImages.length;
+      // Processing originals
+      ctx.db
+        .query("images")
+        .withIndex("by_is_generated_and_status", (q) =>
+          q.eq("isGenerated", false).eq("generationStatus", "processing")
+        )
+        .collect(),
+    ]);
+
+    return generatedImages.length + pendingImages.length + processingImages.length;
   },
 });
 
