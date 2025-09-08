@@ -3,7 +3,7 @@
 **Document Name:** File Upload Feature – Implementation Plan  
 **Date:** 2025-09-08  
 **Version:** 0.3  
-**Status:** Active development
+**Status:** Active development (Failed tab + auto-retry implemented)
 
 ## Executive Summary
 Enable signed-in users to upload an existing image file in addition to webcam capture. Use client-side compression (Option A: browser-image-compression + heic2any) to keep uploads ≤ 5 MB and standardize on JPEG when needed. Reuse the Convex storage + Gemini 2.5 Flash pipeline so uploaded images generate the same decorated outputs that appear in the real-time gallery. Add server-side validation in Convex to enforce size/type limits. Keep diffs minimal and agent-friendly.
@@ -90,17 +90,25 @@ await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": prepared.typ
 
 ## UX Enhancements (Polish)
 - Show per-item placeholders for originals with `generationStatus` of `pending` or `processing` in the gallery; overlay spinner + status text. See [ImagePreview overlay](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116).
-- Add inline error messaging on upload failures with a Retry button that re-requests a signed URL and retries using the prepared file. See [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L395-L448) and [retryUpload](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L200-L259).
+- Exclude failed originals from the main gallery; instead, render them in a dedicated “Failed” tab with error context and a Retry button. See [Failed tab UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L416-L448) and combined list excluding failed at [app/page.tsx#L75-L86](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86).
+- Add inline error messaging on upload failures with a Retry button that re-requests a signed URL and retries using the prepared file. See [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L329-L391) and [retryUpload](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L176-L217).
 - Map backend/internal errors (e.g., AI quota) to user-friendly messages (“Processing unavailable”) without leaking internal details.
 - Add a "Preparing…" state during HEIC transcode/compression for better feedback.
+
+## Reliability Enhancements (Backend)
+- Pass validated `contentType` from scheduler to generator to avoid header mis-detections. See pass-through at [convex/generate.ts#L112-L117](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L112-L117) and usage at [convex/generate.ts#L168-L171](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L168-L171).
+- Add `generationAttempts` to originals and auto-retry once on failure; subsequent failures remain failed until manually retried. See [schema](file:///Users/ray/workspace/drip-me-out/convex/schema.ts#L9-L14) and [maybeRetryOnce](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L121-L146).
+- Manual retry supported via [retryOriginal](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L148-L170) and wired to Failed tab Retry.
 
 ## Acceptance Criteria
 - Users can select files via Upload tab and start generation when valid.  
 - Client ensures output ≤ 5 MB (downscaled to ≤ 2048px) and JPEG.  
 - Server rejects invalid uploads (>5 MB or unsupported type) with clear validation messages.  
 - Errors (quota, network, validation) surface via toasts; UI re-enables appropriately.  
-- Pending uploads appear as placeholders in the gallery until completion; completed results replace the perceived "in-progress" state.  
-- Retry path is available on transient upload failure without reselecting the file.  
+- Pending uploads appear as placeholders in the main gallery; failed originals do not appear in the main gallery.  
+- Failed originals are visible in a dedicated Failed tab with error context and a Retry button.  
+- Retry path is available on transient upload failure without reselecting the file, and manual retry is available for failed generations.  
+- Auto-retry once is attempted server-side; if it fails again, item remains in Failed.  
 - Lighthouse a11y ≥ 95.
 
 ## Testing & Verification

@@ -1,7 +1,7 @@
 # File Upload – Progress & Findings
 
 Status: In progress  
-Last updated: 2025-09-08 (placeholder + retry UX implemented)
+Last updated: 2025-09-08 (auto-retry + Failed tab + manual retry implemented)
 
 ## Summary
 Initial implementation landed and basic E2E works: client-side compression/transcoding, Convex upload + scheduling, and generated images appear in the gallery. During QA we observed two UX gaps and one intermittent upload error (Safari iOS). This doc tracks regressions, hypotheses, and the plan to polish the UX.
@@ -26,7 +26,7 @@ Initial implementation landed and basic E2E works: client-side compression/trans
   - Signed URL expiration during long client-side processing for very large images (compression/transcode time). Less likely, but possible on older devices.
   - Intermittent connectivity during mobile upload.
 
-## Proposed Fixes (Frontend)
+## Implemented (Frontend)
 
 A) Show per-item pending placeholders in the gallery
 - Approach: Include pending/processing originals in the grid with a shimmer card and status text.
@@ -34,8 +34,8 @@ A) Show per-item pending placeholders in the gallery
   - Minimal: Extend the grid data to also include items where `generationStatus` is `"pending" | "processing"` and `isGenerated === false`.
   - Visual: Render a placeholder card with a spinner and text like "Generating…"; optionally a cancel/retry affordance later.
 - Touchpoints:
-  - Data prep: modify `generatedImages` logic to maintain two arrays (pending + completed) or merge and render by status. See [generatedImages derivation](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L72-L75).
-  - UI: Update [ImagePreview](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L1-L200) to support a `generationStatus` variant and render a placeholder for non-generated items.
+  - Data prep: combine pending/processing originals with generated and exclude failed from the main gallery. See [combinedImages](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86).
+- UI: Update [ImagePreview](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L1-L200) to support a `generationStatus` overlay and a failure overlay.
 
 B) More actionable error handling for uploads
 - Add retry flow with fresh signed URL:
@@ -50,10 +50,12 @@ C) Keep the UI busy state more explicit
 - Disable the file input during upload and generation (already implemented) and add an inline status label.
 - Consider a small banner near the gallery indicating an item is pending (in addition to the corner spinner), with a link to scroll to the placeholder card.
 
-## Proposed Fixes (Backend)
+## Implemented (Backend)
 
-- No backend changes strictly required for the two issues above.
-- Optional: add a short-lived, slightly longer signed URL duration if we confirm expiration during large-client-prep conditions (only if logs show token expiry). Currently not proven.
+- Validation remains in scheduler: size and contentType via `_storage`.  
+- Pass through validated `contentType` to generator to avoid header mis-detections (HEIC/JPEG). See [convex/generate.ts](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L112-L117) and [usage](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L168-L171).  
+- Auto-retry once on generation failure using `generationAttempts` and [maybeRetryOnce](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L121-L146).  
+- Manual retry via [retryOriginal](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L148-L170); wired in Failed tab.
 
 ## Regression Check
 
@@ -63,18 +65,22 @@ C) Keep the UI busy state more explicit
 
 ## Acceptance Criteria Addendums (Polish)
 
-- Pending images appear immediately in the gallery as placeholders with clear status.
+- Pending images appear immediately in the main gallery as placeholders with clear status.
+- Failed originals are listed only in the Failed tab with a clear Retry action; they are excluded from the main gallery.
 - Upload failures present a clear call-to-action to retry; if retry succeeds, the flow continues without manual re-selection of the file.
+- Auto-retry once is attempted server-side; persistent failures remain in the Failed tab until manually retried.
 - Clearer messaging for transient network errors on Safari iOS.
 
 ## Action Items
 
 - [x] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing } (see overlay at [components/ImagePreview.tsx](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116)).
-- [x] Update page data flow to include pending items (combined list) in [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L71-L84), pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L88-L135), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L428-L436).
-- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L395-L448) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L200-L259).
-- [x] Optional: add preparation progress state ("Preparing…") in [Upload button label](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L418-L433). Upload progress remains a follow-up.
-- [x] Hide backend/internal errors (e.g., AI quota) behind generic, user-friendly copy; see [toUserMessage mapper](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L136-L147).
+- [x] Update page data flow to include pending items and exclude failed from main gallery at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86); pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L95-L115), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L400-L408).
+- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L329-L391) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L176-L217).
+- [x] Optional: add preparation progress state ("Preparing…") in [Upload button label](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L366-L373). Upload progress remains a follow-up.
+- [x] Hide backend/internal errors (e.g., AI quota) behind generic, user-friendly copy; see [toUserMessage mapper](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L137-L147).
 - [x] DRY upload/schedule flow with helper: [lib/uploadAndSchedule.ts](file:///Users/ray/workspace/drip-me-out/lib/uploadAndSchedule.ts#L1-L64), used in camera + upload paths.
+- [x] Add dedicated Failed tab with manual retry wired to [retryOriginal](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L148-L170) at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L416-L448).
+- [x] Auto-retry once on generation failure via [maybeRetryOnce](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L121-L146).
 - [ ] QA on Safari iOS with poor connectivity.
 
 ## References
