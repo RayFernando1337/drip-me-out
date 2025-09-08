@@ -109,10 +109,11 @@ export const scheduleImageGeneration = mutation({
       generationStatus: "pending",
     });
 
-    // Schedule the image generation to run immediately
+    // Schedule the image generation to run immediately, passing through the validated contentType
     await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
       storageId,
       originalImageId,
+      contentType,
     });
 
     return originalImageId;
@@ -123,9 +124,10 @@ export const generateImage = internalAction({
   args: {
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
+    contentType: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { storageId, originalImageId } = args;
+    const { storageId, originalImageId, contentType } = args;
 
     console.log(
       `[generateImage] Using Gemini 2.5 Flash Image Preview with storageId: ${storageId}, originalImageId: ${originalImageId}`
@@ -163,7 +165,9 @@ export const generateImage = internalAction({
       if (!response.ok) {
         throw new Error(`Failed to fetch uploaded image from storage: ${response.statusText}`);
       }
-      const mimeType = response.headers.get("content-type") || "image/png";
+      // Prefer validated contentType captured at scheduling time; fall back to response header; default to image/jpeg
+      const headerType = response.headers.get("content-type") || undefined;
+      const mimeType = contentType || headerType || "image/jpeg";
       const arrayBuffer = await response.arrayBuffer();
       const base64Image = arrayBufferToBase64(arrayBuffer);
 

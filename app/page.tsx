@@ -73,11 +73,15 @@ function Content() {
   const prevCombinedLengthRef = useRef<number>(0);
 
   const combinedImages = useMemo(() => {
-    const pendingOrProcessing = images.filter(
-      (img) => !img.isGenerated && (img.generationStatus === "pending" || img.generationStatus === "processing")
+    const pendingOrProcessingOrFailed = images.filter(
+      (img) =>
+        !img.isGenerated &&
+        (img.generationStatus === "pending" ||
+          img.generationStatus === "processing" ||
+          img.generationStatus === "failed")
     );
     const generated = images.filter((img) => img.isGenerated);
-    const all = [...pendingOrProcessing, ...generated];
+    const all = [...pendingOrProcessingOrFailed, ...generated];
     // Ensure unique by _id (defensive)
     return all.filter((img, index, arr) => arr.findIndex((it) => it._id === img._id) === index);
   }, [images]);

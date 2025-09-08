@@ -103,8 +103,19 @@ export default function ImagePreview({
                 />
 
                 {/* Generation status overlay */}
-                {(image.data.generationStatus === "pending" ||
-                  image.data.generationStatus === "processing") && (
+                {image.data.generationStatus === "failed" ? (
+                  <div className="absolute inset-0 bg-red-600/70 flex items-center justify-center">
+                    <div className="text-center text-white px-3">
+                      <p className="text-sm font-bold">Generation failed</p>
+                      {image.data.generationError && (
+                        <p className="text-xs opacity-90 mt-1 line-clamp-2">
+                          {image.data.generationError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (image.data.generationStatus === "pending" ||
+                  image.data.generationStatus === "processing") ? (
                   <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                     <div className="text-center text-white">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
@@ -113,7 +124,7 @@ export default function ImagePreview({
                       </p>
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
