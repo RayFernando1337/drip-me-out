@@ -63,17 +63,28 @@ export const getImages = query({
   handler: async (ctx) => {
     const images = await ctx.db.query("images").order("desc").collect();
 
-    // Generate URLs for each image
+    // Generate URLs for each image, handling both old and new field names
     const imagesWithUrls = await Promise.all(
-      images.map(async (image) => ({
-        ...image,
-        url: await ctx.storage.getUrl(image.storageId),
-      }))
+      images.map(async (image) => {
+        // Handle migration: use storageId if available, fallback to body
+        const storageId = image.storageId || (image as any).body;
+        if (!storageId) {
+          console.warn(`Image ${image._id} has no storageId or body field`);
+          return null;
+        }
+        
+        const url = await ctx.storage.getUrl(storageId);
+        return {
+          ...image,
+          storageId: storageId,
+          url: url,
+        };
+      })
     );
 
     // Filter out images without URLs and assert type
     return imagesWithUrls.filter(
-      (image): image is typeof image & { url: string } => image.url !== null
+      (image): image is typeof image & { url: string } => image !== null && image.url !== null
     );
   },
 });
@@ -117,11 +128,16 @@ export const getImageById = query({
       return null;
     }
 
-    const url = await ctx.storage.getUrl(image.storageId);
+    // Handle migration: use storageId if available, fallback to body
+    const storageId = image.storageId || (image as any).body;
+    if (!storageId) return null;
+    
+    const url = await ctx.storage.getUrl(storageId);
     if (!url) return null;
 
     return {
       ...image,
+      storageId: storageId,
       url,
     };
   },

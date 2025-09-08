@@ -3,7 +3,9 @@ import { v } from "convex/values";
 
 export default defineSchema({
   images: defineTable({
-    storageId: v.id("_storage"), // Proper Convex storage ID type
+    // Support both old and new field names during migration
+    storageId: v.optional(v.id("_storage")), // New field
+    body: v.optional(v.string()), // Legacy field - will be removed after migration
     createdAt: v.number(),
     isGenerated: v.optional(v.boolean()),
     originalImageId: v.optional(v.id("images")), // Proper ID type for references

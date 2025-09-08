@@ -146,7 +146,12 @@ export const maybeRetryOnce = mutation({
     if (attempts <= 1) {
       // Reset to pending and clear error before retry
       await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-      const storageId = img.storageId;
+      // Handle migration: use storageId if available, fallback to body
+      const storageId = img.storageId || (img as any).body;
+      if (!storageId) {
+        console.error(`Image ${imageId} has no storageId or body field`);
+        return false;
+      }
       const meta = await ctx.db.system.get(storageId);
       const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
       await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
@@ -169,7 +174,12 @@ export const retryOriginal = mutation({
     if (!img || img.isGenerated) return null;
     // Reset status and error; do not modify attempts here (manual retries not limited)
     await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-    const storageId = img.storageId;
+    // Handle migration: use storageId if available, fallback to body
+    const storageId = img.storageId || (img as any).body;
+    if (!storageId) {
+      console.error(`Image ${imageId} has no storageId or body field`);
+      return null;
+    }
     const meta = await ctx.db.system.get(storageId);
     const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
     await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
