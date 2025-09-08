@@ -102,6 +102,8 @@ function Content() {
           method: "POST",
           headers: { "Content-Type": prepared.type },
           body: prepared,
+          // keepalive helps with cross-origin uploads and prevents Safari from aborting requests
+          keepalive: true,
         });
 
         if (!response.ok) {
