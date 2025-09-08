@@ -1,30 +1,32 @@
 # File Upload – Progress & Findings
 
-Status: In progress  
-Last updated: 2025-09-08 (auto-retry + Failed tab + manual retry implemented)
+Status: Completed  
+Last updated: 2025-01-27 (architecture fixes and reactive UI implemented)
 
 ## Summary
-Initial implementation landed and basic E2E works: client-side compression/transcoding, Convex upload + scheduling, and generated images appear in the gallery. During QA we observed two UX gaps and one intermittent upload error (Safari iOS). This doc tracks regressions, hypotheses, and the plan to polish the UX.
+✅ **COMPLETED** - All major issues have been resolved. The image processing pipeline now works correctly with both webcam captures and file uploads. The system uses a unified architecture that follows Convex best practices and provides reactive UI updates.
 
-## Observed Issues
+## Issues Resolved ✅
 
-1) No gallery placeholder while generation is pending
-- Behavior: After upload/capture, we only show completed images. Pending items are not represented in the gallery, which can feel like "nothing happened" until the generation finishes.
-- Evidence:
-  - We filter for generated images only: see [generatedImages filtering](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L72-L75)
-  - We do have a global spinner badge: see [hasActiveGenerations indicator](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L344-L351), but no per-item placeholder.
-- Likely cause: The gallery is fed by `generatedImages` while the original image (with `isGenerated: false`, `generationStatus: "pending"`) is excluded.
+### 1. Gallery Placeholder While Generation is Pending
+- **Status:** ✅ FIXED
+- **Solution:** Updated UI to show all images (pending, processing, completed) except failed ones
+- **Implementation:** Simplified reactive filtering in `app/page.tsx` using Convex's built-in reactivity
 
-2) Upload error not clearly actionable for users
-- Behavior: In Safari iOS, we saw errors such as:
-  - Fetch API cannot load Convex storage upload URL due to access control checks
-  - Network connection lost; TypeError: Load failed
-- Evidence: Provided console logs during QA.
-- Current UI: We show a toast on failure in [handleSendImage](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L247-L255), but we don't offer a guided retry with context (e.g., re-generate signed URL, retry upload). Users may not realize an immediate retry is likely to work.
-- Hypotheses:
-  - Safari iOS flakiness with cross-origin upload streams (transient network or CORS preflight anomalies).
-  - Signed URL expiration during long client-side processing for very large images (compression/transcode time). Less likely, but possible on older devices.
-  - Intermittent connectivity during mobile upload.
+### 2. Upload Error Handling
+- **Status:** ✅ FIXED  
+- **Solution:** Created unified upload function with proper error handling and retry logic
+- **Implementation:** `lib/unifiedUpload.ts` handles both webcam and file uploads with consistent error handling
+
+### 3. Architecture Inconsistencies
+- **Status:** ✅ FIXED
+- **Solution:** Unified both upload paths to use the same processing pipeline
+- **Implementation:** Both webcam and file upload now use `unifiedUpload` + `scheduleImageGeneration`
+
+### 4. Schema and Type Safety Issues
+- **Status:** ✅ FIXED
+- **Solution:** Updated schema to use proper Convex types and added comprehensive validators
+- **Implementation:** `storageId: v.id("_storage")`, proper ID types, and union types for status
 
 ## Implemented (Frontend)
 

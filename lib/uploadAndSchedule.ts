@@ -1,7 +1,7 @@
 "use client";
 
-// Small helper to DRY the upload + schedule flow with a single retry on network errors.
-// No external deps; uses fetch and the mutations passed in.
+// DEPRECATED: Use unifiedUpload from @/lib/unifiedUpload.ts instead
+// This file is kept for backward compatibility but should be migrated
 
 export type GenerateUploadUrl = () => Promise<string>;
 export type ScheduleFn = (args: Record<string, unknown>) => Promise<unknown>;
