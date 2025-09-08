@@ -70,7 +70,7 @@ function Content() {
   const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
 
   // Map low-level errors to friendly, user-facing messages
-  const toUserMessage = (error: unknown): string => {
+  const toUserMessage = useCallback((error: unknown): string => {
     const msg = error instanceof Error ? error.message : String(error || "");
     if (msg.includes("Load failed") || msg.includes("Network") || msg.includes("Failed to fetch")) {
       return "Network issue during upload. Please check your connection and try again.";
@@ -80,6 +80,19 @@ function Content() {
     }
     // Fallback
     return "Something went wrong. Please try again.";
+  }, []);
+
+  // Helper to check if error is network-related
+  const isNetworkError = (error: unknown): boolean => {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    return (
+      msg.includes("NetworkError") ||
+      msg.includes("TypeError: Load failed") ||
+      msg.includes("network connection was lost") ||
+      msg.includes("Failed to fetch") ||
+      msg.includes("Network request failed") ||
+      msg.includes("access control checks")
+    );
   };
 
   // Consolidated upload function for both file uploads and webcam captures
@@ -96,31 +109,56 @@ function Content() {
 
         setIsUploading(true);
 
-        // Upload to Convex storage
-        const uploadUrl = await generateUploadUrl();
-        const response = await fetch(uploadUrl, {
-          method: "POST",
-          headers: { "Content-Type": prepared.type },
-          body: prepared,
-          // keepalive helps with cross-origin uploads and prevents Safari from aborting requests
-          keepalive: true,
-        });
+        // Attempt upload with retry logic (up to 2 attempts)
+        let lastError: unknown = null;
+        const maxAttempts = 2;
 
-        if (!response.ok) {
-          throw new Error(`Upload failed: ${response.statusText}`);
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          try {
+            // Get fresh upload URL for each attempt
+            const uploadUrl = await generateUploadUrl();
+
+            // Only use keepalive for small files (< 64KB limit in Safari)
+            const useKeepAlive = prepared.size < 64 * 1024;
+
+            const response = await fetch(uploadUrl, {
+              method: "POST",
+              headers: { "Content-Type": prepared.type },
+              body: prepared,
+              ...(useKeepAlive && { keepalive: true }),
+            });
+
+            if (!response.ok) {
+              throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
+            }
+
+            const { storageId } = await response.json();
+
+            // Schedule generation using the consolidated backend mutation
+            await uploadAndScheduleGeneration({ storageId });
+
+            toast.success("Image Generation Started!", {
+              description: "Your image is being processed in the background.",
+              duration: 4000,
+            });
+
+            return true; // Success
+          } catch (error) {
+            lastError = error;
+
+            // Only retry network errors on first attempt
+            if (attempt === 1 && isNetworkError(error)) {
+              console.log(`Upload attempt ${attempt} failed with network error, retrying...`);
+              continue;
+            }
+
+            // Don't retry, exit loop
+            break;
+          }
         }
 
-        const { storageId } = await response.json();
-
-        // Schedule generation using the consolidated backend mutation
-        await uploadAndScheduleGeneration({ storageId });
-
-        toast.success("Image Generation Started!", {
-          description: "Your image is being processed in the background.",
-          duration: 4000,
-        });
-
-        return true; // Success
+        // If we get here, all attempts failed
+        throw lastError;
       } catch (error) {
         console.error("Upload failed:", error);
         const msg = toUserMessage(error);
@@ -132,7 +170,7 @@ function Content() {
         setIsUploading(false);
       }
     },
-    [generateUploadUrl, uploadAndScheduleGeneration]
+    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage]
   );
 
   const handleImageCapture = async (imageData: string) => {
