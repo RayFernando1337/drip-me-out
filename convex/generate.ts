@@ -86,6 +86,21 @@ export const scheduleImageGeneration = mutation({
   handler: async (ctx, args) => {
     const { storageId } = args;
 
+    // Validate file metadata (size/type) before inserting
+    const meta = await ctx.db.system.get(storageId);
+    if (!meta) throw new Error("VALIDATION: Missing storage metadata");
+
+    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
+    const contentType: string | undefined = (meta as { contentType?: string }).contentType;
+    const size: number | undefined = (meta as { size?: number }).size;
+
+    if (!contentType || !allowed.has(contentType)) {
+      throw new Error("VALIDATION: Unsupported content type");
+    }
+    if (typeof size === "number" && size > 5 * 1024 * 1024) {
+      throw new Error("VALIDATION: File exceeds 5 MB limit");
+    }
+
     // First, save the original image with pending status
     const originalImageId = await ctx.db.insert("images", {
       body: storageId,

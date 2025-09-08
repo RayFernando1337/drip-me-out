@@ -187,13 +187,27 @@ function Content() {
   const handleSendImage = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedImage) return;
+
+    // Client-side validation of type
+    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
+    if (!allowed.has(selectedImage.type)) {
+      toast.error("Unsupported file type", {
+        description: "Please choose a JPEG, PNG, or HEIC/HEIF image.",
+      });
+      return;
+    }
+
     setIsUploading(true);
     try {
+      // Prepare image (HEIC->JPEG, compress to <=5MB)
+      const { prepareImageForUpload } = await import("@/lib/imagePrep");
+      const { file: prepared } = await prepareImageForUpload(selectedImage);
+
       const uploadUrl = await generateUploadUrl();
       const result = await fetch(uploadUrl, {
         method: "POST",
-        headers: { "Content-Type": selectedImage.type },
-        body: selectedImage,
+        headers: { "Content-Type": prepared.type },
+        body: prepared,
       });
       if (!result.ok) {
         throw new Error(`Upload failed: ${result.statusText}`);
@@ -208,7 +222,10 @@ function Content() {
           duration: 4000,
         });
       } catch (genError) {
-        if (isQuotaError(genError)) {
+        const msg = genError instanceof Error ? genError.message : String(genError || "");
+        if (msg.startsWith("VALIDATION:")) {
+          toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
+        } else if (isQuotaError(genError)) {
           toast.error("Gemini API Quota Exceeded", {
             description:
               "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
@@ -231,6 +248,8 @@ function Content() {
       if (imageInput.current) imageInput.current.value = "";
     } catch (error) {
       console.error("Upload failed:", error);
+      const msg = error instanceof Error ? error.message : String(error || "");
+      toast.error("Upload failed", { description: msg });
     } finally {
       setIsUploading(false);
     }
@@ -265,29 +284,31 @@ function Content() {
                 <TabsTrigger value="camera" className="text-sm font-medium">
                   📸 Camera
                 </TabsTrigger>
-                {/* <TabsTrigger value="upload" className="text-sm font-medium">📤 Upload</TabsTrigger> */}
+                <TabsTrigger value="upload" className="text-sm font-medium">📤 Upload</TabsTrigger>
               </TabsList>
               <TabsContent value="upload" className="mt-4">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Upload Image</CardTitle>
-                  </CardHeader>
+                <form onSubmit={handleSendImage} aria-label="Upload image form">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Upload Image</CardTitle>
+                    </CardHeader>
                     <CardContent className="flex-1 flex flex-col justify-center">
                       <div className="space-y-4">
                         <Input
                           type="file"
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/heic,image/heif"
+                          aria-label="Choose image file"
                           ref={imageInput}
-                          onChange={(event) => setSelectedImage(event.target.files![0])}
-                          disabled={selectedImage !== null}
+                          onChange={(event) => setSelectedImage(event.target.files?.[0] ?? null)}
+                          disabled={isUploading || isGenerating}
                           className="w-full"
                         />
                         <Button
                           type="submit"
-                          onClick={handleSendImage}
                           size="sm"
                           variant="outline"
                           className="w-full h-11"
+                          aria-busy={isUploading || isGenerating}
                           disabled={isUploading || isGenerating || !selectedImage}
                         >
                           {isUploading
@@ -298,7 +319,8 @@ function Content() {
                         </Button>
                       </div>
                     </CardContent>
-                </Card>
+                  </Card>
+                </form>
               </TabsContent>
               <TabsContent value="camera" className="mt-4">
                 <div className="w-full">
