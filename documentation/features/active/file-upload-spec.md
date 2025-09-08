@@ -88,12 +88,19 @@ await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": prepared.typ
 - Policy: allow `image/jpeg`, `image/png`, `image/heic`, `image/heif`; max size = 5 MB.  
 - Behavior: if invalid, `throw new Error("VALIDATION: <reason>")` so the client can surface a precise toast; do not insert or schedule.
 
+## UX Enhancements (Polish)
+- Show per-item placeholders for originals with `generationStatus` of `pending` or `processing` in the gallery; overlay spinner + status text. See [ImagePreview overlay](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116).
+- Add inline error messaging on upload failures with a Retry button that re-requests a signed URL and retries using the prepared file. See [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L395-L448) and [retryUpload](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L200-L259).
+- Map backend/internal errors (e.g., AI quota) to user-friendly messages (“Processing unavailable”) without leaking internal details.
+- Add a "Preparing…" state during HEIC transcode/compression for better feedback.
+
 ## Acceptance Criteria
 - Users can select files via Upload tab and start generation when valid.  
 - Client ensures output ≤ 5 MB (downscaled to ≤ 2048px) and JPEG.  
 - Server rejects invalid uploads (>5 MB or unsupported type) with clear validation messages.  
 - Errors (quota, network, validation) surface via toasts; UI re-enables appropriately.  
-- Generated outputs appear in the gallery; pagination and status indicators unchanged.  
+- Pending uploads appear as placeholders in the gallery until completion; completed results replace the perceived "in-progress" state.  
+- Retry path is available on transient upload failure without reselecting the file.  
 - Lighthouse a11y ≥ 95.
 
 ## Testing & Verification

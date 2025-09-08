@@ -54,9 +54,12 @@ function Content() {
   const scheduleImageGeneration = useMutation(api.generate.scheduleImageGeneration);
 
   const imageInput = useRef<HTMLInputElement>(null);
+  const preparedRef = useRef<File | null>(null);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const imagesData = useQuery(api.images.getImages);
   const images = useMemo(() => imagesData || [], [imagesData]);
@@ -67,10 +70,16 @@ function Content() {
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const IMAGES_PER_PAGE = 12;
 
-  const prevGeneratedLengthRef = useRef<number>(0);
+  const prevCombinedLengthRef = useRef<number>(0);
 
-  const generatedImages = useMemo(() => {
-    return images.filter((img) => img.isGenerated);
+  const combinedImages = useMemo(() => {
+    const pendingOrProcessing = images.filter(
+      (img) => !img.isGenerated && (img.generationStatus === "pending" || img.generationStatus === "processing")
+    );
+    const generated = images.filter((img) => img.isGenerated);
+    const all = [...pendingOrProcessing, ...generated];
+    // Ensure unique by _id (defensive)
+    return all.filter((img, index, arr) => arr.findIndex((it) => it._id === img._id) === index);
   }, [images]);
 
   const hasActiveGenerations = useMemo(() => {
@@ -80,39 +89,39 @@ function Content() {
   }, [images]);
 
   useEffect(() => {
-    const currentGeneratedLength = generatedImages.length;
-    if (currentGeneratedLength !== prevGeneratedLengthRef.current) {
-      const uniqueImages = generatedImages.filter((img, index, arr) =>
+    const currentLength = combinedImages.length;
+    if (currentLength !== prevCombinedLengthRef.current) {
+      const uniqueImages = combinedImages.filter((img, index, arr) =>
         arr.findIndex((item) => item._id === img._id) === index
       );
       setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
       setCurrentPage(0);
-      prevGeneratedLengthRef.current = currentGeneratedLength;
+      prevCombinedLengthRef.current = currentLength;
     }
-  }, [generatedImages]);
+  }, [combinedImages]);
 
   useEffect(() => {
-    if (generatedImages.length > 0 && displayedImages.length === 0) {
-      const uniqueImages = generatedImages.filter((img, index, arr) =>
+    if (combinedImages.length > 0 && displayedImages.length === 0) {
+      const uniqueImages = combinedImages.filter((img, index, arr) =>
         arr.findIndex((item) => item._id === img._id) === index
       );
       setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
       setCurrentPage(0);
     }
-  }, [generatedImages.length, displayedImages.length, generatedImages]);
+  }, [combinedImages.length, displayedImages.length, combinedImages]);
 
   const handleLoadMore = useCallback(() => {
     if (isLoadingMore) return;
-    const uniqueGeneratedImages = generatedImages.filter((img, index, arr) =>
+    const uniqueImagesList = combinedImages.filter((img, index, arr) =>
       arr.findIndex((item) => item._id === img._id) === index
     );
-    const totalImages = uniqueGeneratedImages.length;
+    const totalImages = uniqueImagesList.length;
     const nextPage = currentPage + 1;
     const startIndex = nextPage * IMAGES_PER_PAGE;
     const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
     if (startIndex < totalImages) {
       setIsLoadingMore(true);
-      const newImages = uniqueGeneratedImages.slice(startIndex, endIndex);
+      const newImages = uniqueImagesList.slice(startIndex, endIndex);
       setDisplayedImages((prev) => {
         const combined = [...prev, ...newImages];
         return combined.filter((img, index, arr) =>
@@ -122,16 +131,19 @@ function Content() {
       setCurrentPage(nextPage);
       setIsLoadingMore(false);
     }
-  }, [generatedImages, currentPage, isLoadingMore]);
+  }, [combinedImages, currentPage, isLoadingMore]);
 
-  const isQuotaError = (error: unknown): boolean => {
-    const errorMessage = error instanceof Error ? error.message : String(error || "");
-    return (
-      errorMessage.includes("quota") ||
-      errorMessage.includes("RESOURCE_EXHAUSTED") ||
-      errorMessage.includes("rate limit") ||
-      errorMessage.includes("429")
-    );
+  // Map low-level errors to friendly, user-facing messages
+  const toUserMessage = (error: unknown): string => {
+    const msg = error instanceof Error ? error.message : String(error || "");
+    if (msg.includes("Load failed") || msg.includes("Network") || msg.includes("Failed to fetch")) {
+      return "Network issue during upload. Please check your connection and try again.";
+    }
+    if (msg.startsWith("VALIDATION:")) {
+      return msg.replace(/^VALIDATION:\s*/, "");
+    }
+    // Fallback
+    return "Something went wrong. Please try again.";
   };
 
   const handleImageCapture = async (imageData: string) => {
@@ -140,49 +152,69 @@ function Content() {
       const response = await fetch(imageData);
       const blob = await response.blob();
       const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
-      const uploadUrl = await generateUploadUrl();
-      const uploadResult = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!uploadResult.ok) {
-        throw new Error(`Upload failed: ${uploadResult.statusText}`);
-      }
-      const { storageId } = await uploadResult.json();
+
+      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
       setIsGenerating(true);
-      try {
-        await scheduleImageGeneration({ storageId });
-        toast.success("Image Generation Started!", {
-          description: "You can refresh the page, generation will continue in the background.",
-          duration: 4000,
+      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
+        scheduleImageGeneration({
+          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
         });
-      } catch (genError) {
-        if (isQuotaError(genError)) {
-          toast.error("Gemini API Quota Exceeded", {
-            description:
-              "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
-            duration: 8000,
-            action: {
-              label: "Learn More",
-              onClick: () => window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
-            },
-          });
-        } else {
-          toast.error("Failed to Start Generation", {
-            description: "Failed to schedule image generation. Please try again.",
-            duration: 5000,
-          });
-        }
-      } finally {
-        setIsGenerating(false);
-      }
+      await uploadAndSchedule(file, generateUploadUrl, scheduleFn);
+      toast.success("Upload started", {
+        description: "Your image is being processed in the background.",
+        duration: 4000,
+      });
     } catch (error) {
       console.error("Failed to upload captured image:", error);
+      toast.error("Upload failed", { description: toUserMessage(error) });
     } finally {
+      setIsGenerating(false);
       setIsCapturing(false);
     }
   };
+
+  const retryUpload = useCallback(async () => {
+    if (!selectedImage && !preparedRef.current) return;
+    setUploadError(null);
+    setIsUploading(true);
+    try {
+      let prepared = preparedRef.current;
+      if (!prepared && selectedImage) {
+        setIsPreparing(true);
+        const { prepareImageForUpload } = await import("@/lib/imagePrep");
+        const { file } = await prepareImageForUpload(selectedImage);
+        prepared = file;
+        preparedRef.current = file;
+        setIsPreparing(false);
+      }
+      if (!prepared) throw new Error("Nothing to upload. Please reselect your file.");
+
+      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
+      setIsGenerating(true);
+      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
+        scheduleImageGeneration({
+          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
+        });
+      await uploadAndSchedule(prepared, generateUploadUrl, scheduleFn);
+      toast.success("Upload started", {
+        description:
+          "Your image is being processed. You can refresh the page – generation will continue in the background.",
+        duration: 4000,
+      });
+      // Clear selection on success
+      setSelectedImage(null);
+      preparedRef.current = null;
+      if (imageInput.current) imageInput.current.value = "";
+    } catch (error) {
+      console.error("Retry upload failed:", error);
+      const msg = toUserMessage(error);
+      setUploadError(msg);
+      toast.error("Upload failed", { description: msg });
+    } finally {
+      setIsGenerating(false);
+      setIsUploading(false);
+    }
+  }, [generateUploadUrl, scheduleImageGeneration, selectedImage]);
 
   const handleSendImage = async (event: FormEvent) => {
     event.preventDefault();
@@ -197,12 +229,26 @@ function Content() {
       return;
     }
 
-    setIsUploading(true);
+    setUploadError(null);
+    setIsPreparing(true);
     try {
       // Prepare image (HEIC->JPEG, compress to <=5MB)
       const { prepareImageForUpload } = await import("@/lib/imagePrep");
       const { file: prepared } = await prepareImageForUpload(selectedImage);
+      preparedRef.current = prepared;
+    } catch (error) {
+      console.error("Preparation failed:", error);
+      const msg = error instanceof Error ? error.message : String(error || "");
+      setUploadError(msg);
+      toast.error("Preparation failed", { description: msg });
+      setIsPreparing(false);
+      return;
+    }
 
+    setIsPreparing(false);
+    setIsUploading(true);
+    try {
+      const prepared = preparedRef.current!;
       const uploadUrl = await generateUploadUrl();
       const result = await fetch(uploadUrl, {
         method: "POST",
@@ -221,34 +267,27 @@ function Content() {
             "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
           duration: 4000,
         });
+        // Clear selection on success
+        setSelectedImage(null);
+        preparedRef.current = null;
+        if (imageInput.current) imageInput.current.value = "";
       } catch (genError) {
         const msg = genError instanceof Error ? genError.message : String(genError || "");
         if (msg.startsWith("VALIDATION:")) {
           toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
-        } else if (isQuotaError(genError)) {
-          toast.error("Gemini API Quota Exceeded", {
-            description:
-              "You've reached your daily/monthly limit. Try again later or upgrade your plan.",
-            duration: 8000,
-            action: {
-              label: "Learn More",
-              onClick: () => window.open("https://ai.google.dev/gemini-api/docs/rate-limits", "_blank"),
-            },
-          });
         } else {
-          toast.error("Failed to Start Generation", {
-            description: "Failed to schedule image generation. Please try again.",
+          toast.error("Processing unavailable", {
+            description: "We couldn't start processing right now. Please try again shortly.",
             duration: 5000,
           });
         }
       } finally {
         setIsGenerating(false);
       }
-      setSelectedImage(null);
-      if (imageInput.current) imageInput.current.value = "";
     } catch (error) {
       console.error("Upload failed:", error);
       const msg = error instanceof Error ? error.message : String(error || "");
+      setUploadError(msg);
       toast.error("Upload failed", { description: msg });
     } finally {
       setIsUploading(false);
@@ -299,24 +338,52 @@ function Content() {
                           accept="image/jpeg,image/png,image/heic,image/heif"
                           aria-label="Choose image file"
                           ref={imageInput}
-                          onChange={(event) => setSelectedImage(event.target.files?.[0] ?? null)}
-                          disabled={isUploading || isGenerating}
+                          onChange={(event) => {
+                            setUploadError(null);
+                            setSelectedImage(event.target.files?.[0] ?? null);
+                          }}
+                          disabled={isPreparing || isUploading || isGenerating}
                           className="w-full"
                         />
-                        <Button
-                          type="submit"
-                          size="sm"
-                          variant="outline"
-                          className="w-full h-11"
-                          aria-busy={isUploading || isGenerating}
-                          disabled={isUploading || isGenerating || !selectedImage}
-                        >
-                          {isUploading
-                            ? "Uploading..."
-                            : isGenerating
-                            ? "Generating..."
-                            : "Upload & Generate"}
-                        </Button>
+
+                        {uploadError && (
+                          <div role="alert" className="text-sm text-destructive">
+                            {uploadError.includes("Load failed")
+                              ? "Network lost during upload. Please retry."
+                              : uploadError}
+                          </div>
+                        )}
+
+                        <div className="flex gap-2">
+                          <Button
+                            type="submit"
+                            size="sm"
+                            variant="outline"
+                            className="w-full h-11"
+                            aria-busy={isPreparing || isUploading || isGenerating}
+                            disabled={isPreparing || isUploading || isGenerating || !selectedImage}
+                          >
+                            {isPreparing
+                              ? "Preparing..."
+                              : isUploading
+                              ? "Uploading..."
+                              : isGenerating
+                              ? "Generating..."
+                              : "Upload & Generate"}
+                          </Button>
+                          {uploadError && (
+                            <Button
+                              type="button"
+                              onClick={retryUpload}
+                              size="sm"
+                              variant="default"
+                              className="h-11"
+                              disabled={isPreparing || isUploading || isGenerating}
+                            >
+                              Retry upload
+                            </Button>
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -332,11 +399,11 @@ function Content() {
           <div className="w-full">
             <ImagePreview
               images={displayedImages}
-              totalImages={generatedImages.length}
+              totalImages={combinedImages.length}
               currentPage={currentPage}
               imagesPerPage={IMAGES_PER_PAGE}
               onLoadMore={handleLoadMore}
-              hasMore={displayedImages.length < generatedImages.length}
+              hasMore={displayedImages.length < combinedImages.length}
               isLoading={isLoadingMore}
             />
           </div>

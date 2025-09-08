@@ -1,7 +1,7 @@
 # File Upload – Progress & Findings
 
 Status: In progress  
-Last updated: 2025-09-08
+Last updated: 2025-09-08 (placeholder + retry UX implemented)
 
 ## Summary
 Initial implementation landed and basic E2E works: client-side compression/transcoding, Convex upload + scheduling, and generated images appear in the gallery. During QA we observed two UX gaps and one intermittent upload error (Safari iOS). This doc tracks regressions, hypotheses, and the plan to polish the UX.
@@ -69,10 +69,12 @@ C) Keep the UI busy state more explicit
 
 ## Action Items
 
-- [ ] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing }.
-- [ ] Update page data flow to include pending items (or maintain separate arrays and interleave).
-- [ ] Add Retry button and inline helper text on upload error; regenerate signed URL on retry.
-- [ ] Optional: add compression/upload progress UI.
+- [x] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing } (see overlay at [components/ImagePreview.tsx](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116)).
+- [x] Update page data flow to include pending items (combined list) in [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L71-L84), pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L88-L135), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L428-L436).
+- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L395-L448) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L200-L259).
+- [x] Optional: add preparation progress state ("Preparing…") in [Upload button label](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L418-L433). Upload progress remains a follow-up.
+- [x] Hide backend/internal errors (e.g., AI quota) behind generic, user-friendly copy; see [toUserMessage mapper](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L136-L147).
+- [x] DRY upload/schedule flow with helper: [lib/uploadAndSchedule.ts](file:///Users/ray/workspace/drip-me-out/lib/uploadAndSchedule.ts#L1-L64), used in camera + upload paths.
 - [ ] QA on Safari iOS with poor connectivity.
 
 ## References
