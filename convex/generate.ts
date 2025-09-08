@@ -89,7 +89,7 @@ export const scheduleImageGeneration = mutation({
     });
 
     // Schedule the image generation to run immediately, passing through the validated contentType
-    await ctx.scheduler.runAfter(0, internal.generateAction.generateImage, {
+    await ctx.scheduler.runAfter(0, (internal as any).generateAction.generateImage, {
       storageId,
       originalImageId,
       contentType,
@@ -114,7 +114,7 @@ export const maybeRetryOnce = mutation({
       const storageId = img.body as unknown as Id<"_storage">;
       const meta = await ctx.db.system.get(storageId);
       const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
-      await ctx.scheduler.runAfter(0, internal.generateAction.generateImage, {
+      await ctx.scheduler.runAfter(0, (internal as any).generateAction.generateImage, {
         storageId,
         originalImageId: imageId,
         contentType,
@@ -137,7 +137,7 @@ export const retryOriginal = mutation({
     const storageId = img.body as unknown as Id<"_storage">;
     const meta = await ctx.db.system.get(storageId);
     const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
-    await ctx.scheduler.runAfter(0, internal.generateAction.generateImage, {
+    await ctx.scheduler.runAfter(0, (internal as any).generateAction.generateImage, {
       storageId,
       originalImageId: imageId,
       contentType,
