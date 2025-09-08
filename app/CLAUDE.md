@@ -1,5 +1,7 @@
 # CLAUDE.md - Next.js App Router
 
+Note: For agents, prefer [app/AGENTS.md](./AGENTS.md) for the nearest rules. The root [../AGENTS.md](../AGENTS.md) provides the project overview.
+
 This file provides Next.js App Router specific guidance for Claude Code when working in the /app directory.
 
 ## Next.js 15 App Router Conventions

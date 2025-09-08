@@ -1,5 +1,7 @@
 # CLAUDE.md
 
+Note: For agents, prefer the local AGENTS.md files. See the root overview in [AGENTS.md](./AGENTS.md) and the per-folder guides: [app/AGENTS.md](./app/AGENTS.md), [components/AGENTS.md](./components/AGENTS.md), [convex/AGENTS.md](./convex/AGENTS.md).
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview

@@ -1,5 +1,7 @@
 # CLAUDE.md - Convex Backend
 
+Note: For agents, prefer [convex/AGENTS.md](./AGENTS.md) for the nearest rules. The root [../AGENTS.md](../AGENTS.md) provides the project overview.
+
 This file provides Convex-specific guidance for Claude Code when working in the /convex directory.
 
 ## IMPORTANT: Always run `bunx convex dev` in background when modifying files here

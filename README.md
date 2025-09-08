@@ -2,6 +2,15 @@
 
 An AI-powered image transformation app that adds diamond chains to your photos using cutting-edge machine learning and real-time backend processing. Built with Next.js and powered by Convex's revolutionary backend-as-a-service platform.
 
+## Agent Guides
+
+- Start with the root overview: [AGENTS.md](./AGENTS.md)
+- Frontend app rules: [app/AGENTS.md](./app/AGENTS.md)
+- Shared components rules: [components/AGENTS.md](./components/AGENTS.md)
+- Convex backend rules: [convex/AGENTS.md](./convex/AGENTS.md)
+
+Agents follow the closest-wins rule (see https://agents.md): read the nearest AGENTS.md in the folder tree first, then fall back to the root.
+
 ## ✨ Features
 
 - **📸 Dual Input Methods**: Upload images or capture live photos with your webcam

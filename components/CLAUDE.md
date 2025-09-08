@@ -1,5 +1,7 @@
 # CLAUDE.md - React Components
 
+Note: For agents, prefer [components/AGENTS.md](./AGENTS.md) for the nearest rules. The root [../AGENTS.md](../AGENTS.md) provides the project overview.
+
 This file provides component-specific guidance for Claude Code when working in the /components directory.
 
 ## Component Conventions
