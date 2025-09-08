@@ -2,6 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { internalAction, mutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -107,6 +108,7 @@ export const scheduleImageGeneration = mutation({
       createdAt: Date.now(),
       isGenerated: false,
       generationStatus: "pending",
+      generationAttempts: 0,
     });
 
     // Schedule the image generation to run immediately, passing through the validated contentType
@@ -117,6 +119,53 @@ export const scheduleImageGeneration = mutation({
     });
 
     return originalImageId;
+  },
+});
+
+// Auto-retry once when generation fails.
+export const maybeRetryOnce = mutation({
+  args: { imageId: v.id("images") },
+  returns: v.boolean(),
+  handler: async (ctx, { imageId }) => {
+    const img = await ctx.db.get(imageId);
+    if (!img || img.isGenerated) return false;
+    const attempts = (img.generationAttempts ?? 0) + 1;
+    await ctx.db.patch(imageId, { generationAttempts: attempts });
+    if (attempts <= 1) {
+      // Reset to pending and clear error before retry
+      await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
+      const storageId = img.body as unknown as Id<"_storage">;
+      const meta = await ctx.db.system.get(storageId);
+      const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
+      await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
+        storageId,
+        originalImageId: imageId,
+        contentType,
+      });
+      return true;
+    }
+    return false;
+  },
+});
+
+// Manual retry from UI
+export const retryOriginal = mutation({
+  args: { imageId: v.id("images") },
+  returns: v.null(),
+  handler: async (ctx, { imageId }) => {
+    const img = await ctx.db.get(imageId);
+    if (!img || img.isGenerated) return null;
+    // Reset status and error; do not modify attempts here (manual retries not limited)
+    await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
+    const storageId = img.body as unknown as Id<"_storage">;
+    const meta = await ctx.db.system.get(storageId);
+    const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
+    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
+      storageId,
+      originalImageId: imageId,
+      contentType,
+    });
+    return null;
   },
 });
 
@@ -277,6 +326,17 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         console.error(`[generateImage] Failed to update image status:`, updateError);
         // Even if status update fails, log the original error
         console.error(`[generateImage] Original generation error: ${errorMessage}`);
+      }
+
+      // Auto-retry once via mutation that increments attempts and reschedules
+      try {
+        const retried = await ctx.runMutation(api.generate.maybeRetryOnce, { imageId: originalImageId });
+        if (retried) {
+          console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
+          return;
+        }
+      } catch (retryError) {
+        console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
       }
     }
   },

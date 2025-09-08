@@ -13,6 +13,7 @@ import { Github } from "lucide-react";
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import type { Id } from "@/convex/_generated/dataModel";
 
 export default function Home() {
   return (
@@ -52,6 +53,7 @@ export default function Home() {
 function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const scheduleImageGeneration = useMutation(api.generate.scheduleImageGeneration);
+  const retryOriginalMutation = useMutation(api.generate.retryOriginal);
 
   const imageInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<File | null>(null);
@@ -73,15 +75,13 @@ function Content() {
   const prevCombinedLengthRef = useRef<number>(0);
 
   const combinedImages = useMemo(() => {
-    const pendingOrProcessingOrFailed = images.filter(
+    const pendingOrProcessing = images.filter(
       (img) =>
         !img.isGenerated &&
-        (img.generationStatus === "pending" ||
-          img.generationStatus === "processing" ||
-          img.generationStatus === "failed")
+        (img.generationStatus === "pending" || img.generationStatus === "processing")
     );
     const generated = images.filter((img) => img.isGenerated);
-    const all = [...pendingOrProcessingOrFailed, ...generated];
+    const all = [...pendingOrProcessing, ...generated];
     // Ensure unique by _id (defensive)
     return all.filter((img, index, arr) => arr.findIndex((it) => it._id === img._id) === index);
   }, [images]);
@@ -90,6 +90,10 @@ function Content() {
     return images.some(
       (img) => img.generationStatus === "pending" || img.generationStatus === "processing"
     );
+  }, [images]);
+
+  const failedImages = useMemo(() => {
+    return images.filter((img) => !img.isGenerated && img.generationStatus === "failed");
   }, [images]);
 
   useEffect(() => {
@@ -220,6 +224,18 @@ function Content() {
     }
   }, [generateUploadUrl, scheduleImageGeneration, selectedImage]);
 
+  const handleRetryFailed = useCallback(async (imageId: Id<"images">) => {
+    try {
+      await retryOriginalMutation({ imageId });
+      toast.success("Retry scheduled", {
+        description: "We queued your image for processing again.",
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err || "");
+      toast.error("Retry failed", { description: msg });
+    }
+  }, [retryOriginalMutation]);
+
   const handleSendImage = async (event: FormEvent) => {
     event.preventDefault();
     if (!selectedImage) return;
@@ -328,6 +344,7 @@ function Content() {
                   📸 Camera
                 </TabsTrigger>
                 <TabsTrigger value="upload" className="text-sm font-medium">📤 Upload</TabsTrigger>
+                <TabsTrigger value="failed" className="text-sm font-medium">⚠️ Failed</TabsTrigger>
               </TabsList>
               <TabsContent value="upload" className="mt-4">
                 <form onSubmit={handleSendImage} aria-label="Upload image form">
@@ -397,6 +414,40 @@ function Content() {
                 <div className="w-full">
                   <Webcam onCapture={handleImageCapture} isUploading={isCapturing || isGenerating} />
                 </div>
+              </TabsContent>
+              <TabsContent value="failed" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Failed Images</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {failedImages.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No failed images. Great job!</div>
+                    ) : (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {failedImages.map((img) => (
+                          <div key={img._id} className="border rounded-lg overflow-hidden">
+                            <div className="aspect-square bg-muted relative">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={img.url} alt="Failed" className="object-cover w-full h-full" />
+                              <div className="absolute inset-0 bg-red-600/50 flex items-center justify-center">
+                                <span className="text-white text-sm font-medium">Failed</span>
+                              </div>
+                            </div>
+                            <div className="p-3 flex items-center justify-between gap-2">
+                              <div className="text-xs text-muted-foreground line-clamp-2">
+                                {img.generationError || "Unknown error"}
+                              </div>
+                              <Button size="sm" onClick={() => handleRetryFailed(img._id)}>
+                                Retry
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </TabsContent>
             </Tabs>
           </div>
