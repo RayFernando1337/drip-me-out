@@ -24,7 +24,6 @@ interface ImagePreviewProps {
 export default function ImagePreview({
   images = [],
   uploadedImages = [],
-  totalImages = 0,
   onLoadMore,
   hasMore = false,
   isLoading = false,
@@ -42,28 +41,13 @@ export default function ImagePreview({
   }));
 
   if (allImages.length === 0 && !isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64 border-2 border-dashed border-accent/30 bg-muted/50 rounded-lg">
-        <div className="text-center text-muted-foreground">
-          <div className="text-6xl mb-4">🎨</div>
-          <p className="text-lg font-medium mb-2">No generated images yet</p>
-          <p className="text-sm">Upload or capture an image to see AI-generated versions</p>
-        </div>
-      </div>
-    );
+    return null; // Handled by the main page empty state
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          {totalImages} AI-generated image{totalImages !== 1 ? "s" : ""} ✨
-          {isLoading && " (loading...)"}
-        </p>
-      </div>
-
-      {/* 3-Column Grid Layout */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="space-y-6">
+      {/* Responsive Gallery Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {allImages.map((image) => (
           <div
             key={image.data._id}
@@ -73,15 +57,15 @@ export default function ImagePreview({
               setIsModalOpen(true);
             }}
           >
-            <div className="bg-card border-border hover:border-accent transition-colors overflow-hidden rounded-lg">
+            <div className="bg-card border border-border/30 hover:border-border transition-all duration-200 overflow-hidden rounded-xl shadow-sm hover:shadow-md">
               <div className="aspect-square relative">
                 <Image
                   src={image.data.url}
-                  alt={`Image ${new Date(image.data.createdAt).toLocaleDateString()}`}
+                  alt="Transformed image"
                   fill
-                  className="object-cover transition-transform group-hover:scale-105"
+                  className="object-cover transition-all duration-300 group-hover:scale-[1.02]"
                   unoptimized={true}
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                   onError={(e) => {
                     // Fallback to placeholder if image fails to load
                     const target = e.target as HTMLImageElement;
@@ -89,10 +73,12 @@ export default function ImagePreview({
                     const parent = target.parentElement;
                     if (parent) {
                       parent.innerHTML = `
-                        <div class="flex items-center justify-center h-full text-muted-foreground">
+                        <div class="flex items-center justify-center h-full text-muted-foreground bg-muted/30">
                           <div class="text-center">
-                            <div class="text-2xl mb-1">📷</div>
-                            <div class="text-xs">Image</div>
+                            <svg class="w-8 h-8 mx-auto mb-2 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+                            </svg>
+                            <div class="text-xs opacity-50">Unable to load</div>
                           </div>
                         </div>
                       `;
@@ -100,26 +86,12 @@ export default function ImagePreview({
                   }}
                 />
 
-                {/* Generation status overlay */}
-                {image.data.generationStatus === "failed" ? (
-                  <div className="absolute inset-0 bg-red-600/70 flex items-center justify-center">
-                    <div className="text-center text-white px-3">
-                      <p className="text-sm font-bold">Generation failed</p>
-                      {image.data.generationError && (
-                        <p className="text-xs opacity-90 mt-1 line-clamp-2">
-                          {image.data.generationError}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ) : image.data.generationStatus === "pending" ||
-                  image.data.generationStatus === "processing" ? (
-                  <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                    <div className="text-center text-white">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white mx-auto mb-2"></div>
-                      <p className="text-sm font-medium">
-                        {image.data.generationStatus === "pending" ? "Queued" : "Processing"}
-                      </p>
+                {/* Minimal status indicators */}
+                {image.data.generationStatus === "pending" ||
+                image.data.generationStatus === "processing" ? (
+                  <div className="absolute inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                      <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     </div>
                   </div>
                 ) : null}
@@ -129,17 +101,22 @@ export default function ImagePreview({
         ))}
       </div>
 
-      {/* Load More Button */}
+      {/* Minimal Load More */}
       {hasMore && (
-        <div className="flex items-center justify-center py-6">
-          <Button size="sm" onClick={onLoadMore} disabled={isLoading} variant="outline">
+        <div className="flex items-center justify-center py-8">
+          <Button
+            onClick={onLoadMore}
+            disabled={isLoading}
+            variant="ghost"
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
             {isLoading ? (
               <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Loading...</span>
+                <div className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin"></div>
+                <span>Loading</span>
               </div>
             ) : (
-              `Load More (${totalImages - allImages.length} remaining)`
+              "Load more"
             )}
           </Button>
         </div>

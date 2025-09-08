@@ -117,7 +117,119 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
+  }
+
+  /* Apple-inspired Typography Hierarchy */
+  h1 {
+    @apply text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight leading-tight;
+  }
+  
+  h2 {
+    @apply text-2xl md:text-3xl lg:text-4xl font-semibold tracking-tight;
+  }
+  
+  h3 {
+    @apply text-xl md:text-2xl font-semibold;
+  }
+
+  /* System Colors for better contrast */
+  :root {
+    --color-system-blue: #007AFF;
+    --color-system-green: #34C759;
+    --color-system-orange: #FF9500;
+    --color-system-red: #FF3B30;
+    --color-system-purple: #AF52DE;
+  }
+
+  .dark {
+    --color-system-blue: #0A84FF;
+    --color-system-green: #32D74B;
+    --color-system-orange: #FF9F0A;
+    --color-system-red: #FF453A;
+    --color-system-purple: #BF5AF2;
+  }
+}
+
+/* Apple-inspired Components */
+@layer components {
+  /* Primary action styling */
+  .btn-primary {
+    @apply bg-[--color-system-blue] text-white hover:bg-[--color-system-blue]/90 
+           transition-all duration-200 ease-out shadow-sm hover:shadow-md;
+  }
+
+  /* Secondary action styling */
+  .btn-secondary {
+    @apply bg-muted/80 hover:bg-muted text-foreground 
+           backdrop-blur-sm border border-border/50 
+           transition-all duration-200 ease-out;
+  }
+
+  /* Destructive action styling */
+  .btn-destructive {
+    @apply bg-[--color-system-red] text-white hover:bg-[--color-system-red]/90
+           transition-all duration-200 ease-out;
+  }
+
+  /* Card improvements */
+  .card-elevated {
+    @apply bg-card/95 backdrop-blur-sm border border-border/50 shadow-lg 
+           hover:shadow-xl transition-all duration-300 ease-out;
+  }
+
+  /* Status indicators */
+  .status-success {
+    @apply bg-[--color-system-green]/10 text-[--color-system-green] 
+           border border-[--color-system-green]/20;
+  }
+
+  .status-warning {
+    @apply bg-[--color-system-orange]/10 text-[--color-system-orange] 
+           border border-[--color-system-orange]/20;
+  }
+
+  .status-error {
+    @apply bg-[--color-system-red]/10 text-[--color-system-red] 
+           border border-[--color-system-red]/20;
+  }
+
+  .status-processing {
+    @apply bg-[--color-system-blue]/10 text-[--color-system-blue] 
+           border border-[--color-system-blue]/20;
+  }
+
+  /* Input improvements */
+  .input-field {
+    @apply bg-background border-2 border-border/40 
+           focus:border-[--color-system-blue] focus:ring-2 focus:ring-[--color-system-blue]/20
+           transition-all duration-200 ease-out placeholder:text-muted-foreground/60;
+  }
+
+  /* Glass morphism effects */
+  .glass {
+    @apply bg-background/80 backdrop-blur-lg border border-border/30 shadow-xl;
+  }
+
+  .glass-card {
+    @apply bg-card/90 backdrop-blur-md border border-border/40 shadow-lg;
+  }
+
+  /* Minimal UI patterns */
+  .minimal-card {
+    @apply bg-card border border-border/30 rounded-xl shadow-sm 
+           hover:shadow-md hover:border-border/50 transition-all duration-200;
+  }
+
+  .minimal-button {
+    @apply text-sm font-medium text-muted-foreground hover:text-foreground 
+           transition-colors duration-200 ease-out;
+  }
+
+  /* Focus states with Apple-like style */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-[--color-system-blue]/20 
+           focus:border-[--color-system-blue] transition-all duration-200;
   }
 }
 

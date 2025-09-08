@@ -1,3 +1,4 @@
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
@@ -203,6 +204,98 @@ export const hasActiveGenerations = query({
       .collect();
 
     return activeCount.length > 0;
+  },
+});
+
+// Paginated gallery images for performance optimization
+export const getGalleryImagesPaginated = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        _id: v.id("images"),
+        _creationTime: v.number(),
+        body: v.id("_storage"),
+        createdAt: v.number(),
+        isGenerated: v.optional(v.boolean()),
+        originalImageId: v.optional(v.id("images")),
+        generationStatus: v.optional(
+          v.union(
+            v.literal("pending"),
+            v.literal("processing"),
+            v.literal("completed"),
+            v.literal("failed")
+          )
+        ),
+        generationError: v.optional(v.string()),
+        generationAttempts: v.optional(v.number()),
+        sharingEnabled: v.optional(v.boolean()),
+        shareExpiresAt: v.optional(v.number()),
+        url: v.string(),
+      })
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    // Get paginated images ordered by creation time (newest first)
+    const result = await ctx.db.query("images").order("desc").paginate(args.paginationOpts);
+
+    // Filter for gallery display:
+    // - Include originals that are pending/processing (placeholders)
+    // - Include all generated images (completed results)
+    // - Exclude failed originals (these go in failed tab only)
+    const filteredImages = result.page.filter((img) => {
+      if (img.isGenerated) {
+        return true; // Show all generated images
+      }
+      // For originals, only show pending/processing (not failed)
+      return img.generationStatus === "pending" || img.generationStatus === "processing";
+    });
+
+    // Generate URLs for each image
+    const imagesWithUrls = await Promise.all(
+      filteredImages.map(async (image) => {
+        const url = await ctx.storage.getUrl(image.body);
+        return {
+          ...image,
+          url,
+        };
+      })
+    );
+
+    // Filter out images without URLs and assert type
+    const validImages = imagesWithUrls.filter(
+      (image): image is typeof image & { url: string } => image.url !== null
+    );
+
+    return {
+      page: validImages,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Get total count of gallery images for pagination info
+export const getGalleryImagesCount = query({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const images = await ctx.db.query("images").collect();
+
+    // Count gallery images (same filter as above)
+    const galleryImages = images.filter((img) => {
+      if (img.isGenerated) {
+        return true; // Count all generated images
+      }
+      // For originals, only count pending/processing (not failed)
+      return img.generationStatus === "pending" || img.generationStatus === "processing";
+    });
+
+    return galleryImages.length;
   },
 });
 
