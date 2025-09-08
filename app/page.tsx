@@ -11,7 +11,7 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { Github } from "lucide-react";
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useCallback, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -67,23 +67,11 @@ function Content() {
   const images = useMemo(() => imagesData || [], [imagesData]);
   const [isCapturing, setIsCapturing] = useState(false);
 
-  const [displayedImages, setDisplayedImages] = useState<typeof images>([]);
-  const [currentPage, setCurrentPage] = useState(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const IMAGES_PER_PAGE = 12;
-
-  const prevCombinedLengthRef = useRef<number>(0);
-
-  const combinedImages = useMemo(() => {
-    const pendingOrProcessing = images.filter(
-      (img) =>
-        !img.isGenerated &&
-        (img.generationStatus === "pending" || img.generationStatus === "processing")
-    );
-    const generated = images.filter((img) => img.isGenerated);
-    const all = [...pendingOrProcessing, ...generated];
-    // Ensure unique by _id (defensive)
-    return all.filter((img, index, arr) => arr.findIndex((it) => it._id === img._id) === index);
+  // Simplified reactive image display - let Convex handle the reactivity
+  const displayedImages = useMemo(() => {
+    // Show all images: pending, processing, completed, and generated
+    // Exclude only failed images from the main gallery
+    return images.filter((img) => img.generationStatus !== "failed");
   }, [images]);
 
   const hasActiveGenerations = useMemo(() => {
@@ -95,51 +83,6 @@ function Content() {
   const failedImages = useMemo(() => {
     return images.filter((img) => !img.isGenerated && img.generationStatus === "failed");
   }, [images]);
-
-  useEffect(() => {
-    const currentLength = combinedImages.length;
-    if (currentLength !== prevCombinedLengthRef.current) {
-      const uniqueImages = combinedImages.filter((img, index, arr) =>
-        arr.findIndex((item) => item._id === img._id) === index
-      );
-      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
-      setCurrentPage(0);
-      prevCombinedLengthRef.current = currentLength;
-    }
-  }, [combinedImages]);
-
-  useEffect(() => {
-    if (combinedImages.length > 0 && displayedImages.length === 0) {
-      const uniqueImages = combinedImages.filter((img, index, arr) =>
-        arr.findIndex((item) => item._id === img._id) === index
-      );
-      setDisplayedImages(uniqueImages.slice(0, IMAGES_PER_PAGE));
-      setCurrentPage(0);
-    }
-  }, [combinedImages.length, displayedImages.length, combinedImages]);
-
-  const handleLoadMore = useCallback(() => {
-    if (isLoadingMore) return;
-    const uniqueImagesList = combinedImages.filter((img, index, arr) =>
-      arr.findIndex((item) => item._id === img._id) === index
-    );
-    const totalImages = uniqueImagesList.length;
-    const nextPage = currentPage + 1;
-    const startIndex = nextPage * IMAGES_PER_PAGE;
-    const endIndex = Math.min(startIndex + IMAGES_PER_PAGE, totalImages);
-    if (startIndex < totalImages) {
-      setIsLoadingMore(true);
-      const newImages = uniqueImagesList.slice(startIndex, endIndex);
-      setDisplayedImages((prev) => {
-        const combined = [...prev, ...newImages];
-        return combined.filter((img, index, arr) =>
-          arr.findIndex((item) => item._id === img._id) === index
-        );
-      });
-      setCurrentPage(nextPage);
-      setIsLoadingMore(false);
-    }
-  }, [combinedImages, currentPage, isLoadingMore]);
 
   // Map low-level errors to friendly, user-facing messages
   const toUserMessage = (error: unknown): string => {
@@ -161,13 +104,9 @@ function Content() {
       const blob = await response.blob();
       const file = new File([blob], `capture-${Date.now()}.jpg`, { type: "image/jpeg" });
 
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
+      const { unifiedUpload } = await import("@/lib/unifiedUpload");
       setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
-        });
-      await uploadAndSchedule(file, generateUploadUrl, scheduleFn);
+      await unifiedUpload(file, generateUploadUrl, scheduleImageGeneration);
       toast.success("Upload started", {
         description: "Your image is being processed in the background.",
         duration: 4000,
@@ -197,13 +136,9 @@ function Content() {
       }
       if (!prepared) throw new Error("Nothing to upload. Please reselect your file.");
 
-      const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
+      const { unifiedUpload } = await import("@/lib/unifiedUpload");
       setIsGenerating(true);
-      const scheduleFn: (args: Record<string, unknown>) => Promise<unknown> = (args) =>
-        scheduleImageGeneration({
-          storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
-        });
-      await uploadAndSchedule(prepared, generateUploadUrl, scheduleFn);
+      await unifiedUpload(prepared, generateUploadUrl, scheduleImageGeneration);
       toast.success("Upload started", {
         description:
           "Your image is being processed. You can refresh the page – generation will continue in the background.",
@@ -269,47 +204,25 @@ function Content() {
     setIsUploading(true);
     try {
       const prepared = preparedRef.current!;
-      const uploadUrl = await generateUploadUrl();
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": prepared.type },
-        body: prepared,
-      });
-      if (!result.ok) {
-        throw new Error(`Upload failed: ${result.statusText}`);
-      }
-      const { storageId } = await result.json();
+      const { unifiedUpload } = await import("@/lib/unifiedUpload");
       setIsGenerating(true);
-      try {
-        await scheduleImageGeneration({ storageId });
-        toast.success("Image Generation Started!", {
-          description:
-            "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
-          duration: 4000,
-        });
-        // Clear selection on success
-        setSelectedImage(null);
-        preparedRef.current = null;
-        if (imageInput.current) imageInput.current.value = "";
-      } catch (genError) {
-        const msg = genError instanceof Error ? genError.message : String(genError || "");
-        if (msg.startsWith("VALIDATION:")) {
-          toast.error("Upload rejected", { description: msg.replace(/^VALIDATION:\s*/, "") });
-        } else {
-          toast.error("Processing unavailable", {
-            description: "We couldn't start processing right now. Please try again shortly.",
-            duration: 5000,
-          });
-        }
-      } finally {
-        setIsGenerating(false);
-      }
+      await unifiedUpload(prepared, generateUploadUrl, scheduleImageGeneration);
+      toast.success("Image Generation Started!", {
+        description:
+          "Your image is being enhanced with AI. You can refresh the page - generation will continue in the background.",
+        duration: 4000,
+      });
+      // Clear selection on success
+      setSelectedImage(null);
+      preparedRef.current = null;
+      if (imageInput.current) imageInput.current.value = "";
     } catch (error) {
       console.error("Upload failed:", error);
-      const msg = error instanceof Error ? error.message : String(error || "");
+      const msg = toUserMessage(error);
       setUploadError(msg);
       toast.error("Upload failed", { description: msg });
     } finally {
+      setIsGenerating(false);
       setIsUploading(false);
     }
   };
@@ -454,12 +367,7 @@ function Content() {
           <div className="w-full">
             <ImagePreview
               images={displayedImages}
-              totalImages={combinedImages.length}
-              currentPage={currentPage}
-              imagesPerPage={IMAGES_PER_PAGE}
-              onLoadMore={handleLoadMore}
-              hasMore={displayedImages.length < combinedImages.length}
-              isLoading={isLoadingMore}
+              totalImages={displayedImages.length}
             />
           </div>
         </div>

@@ -1,3 +1,5 @@
+"use node";
+
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
@@ -38,14 +40,20 @@ function base64ToUint8Array(base64: string): Uint8Array {
 export const updateImageStatus = mutation({
   args: {
     imageId: v.id("images"),
-    status: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
     error: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
     const updateData: {
-      generationStatus: string;
+      generationStatus: typeof status;
       generationError?: string;
     } = { generationStatus: status };
     if (error) {
@@ -53,6 +61,7 @@ export const updateImageStatus = mutation({
     }
 
     await ctx.db.patch(imageId, updateData);
+    return null;
   },
 });
 
@@ -64,14 +73,16 @@ export const saveGeneratedImage = mutation({
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId, originalImageId } = args;
 
     const generatedImageId = await ctx.db.insert("images", {
-      body: storageId,
+      storageId: storageId,
       createdAt: Date.now(),
       isGenerated: true,
       originalImageId: originalImageId,
+      generationStatus: "completed",
     });
     return generatedImageId;
   },
@@ -84,6 +95,7 @@ export const scheduleImageGeneration = mutation({
   args: {
     storageId: v.id("_storage"),
   },
+  returns: v.id("images"),
   handler: async (ctx, args) => {
     const { storageId } = args;
 
@@ -104,7 +116,7 @@ export const scheduleImageGeneration = mutation({
 
     // First, save the original image with pending status
     const originalImageId = await ctx.db.insert("images", {
-      body: storageId,
+      storageId: storageId,
       createdAt: Date.now(),
       isGenerated: false,
       generationStatus: "pending",
@@ -134,7 +146,7 @@ export const maybeRetryOnce = mutation({
     if (attempts <= 1) {
       // Reset to pending and clear error before retry
       await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-      const storageId = img.body as unknown as Id<"_storage">;
+      const storageId = img.storageId;
       const meta = await ctx.db.system.get(storageId);
       const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
       await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
@@ -157,7 +169,7 @@ export const retryOriginal = mutation({
     if (!img || img.isGenerated) return null;
     // Reset status and error; do not modify attempts here (manual retries not limited)
     await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-    const storageId = img.body as unknown as Id<"_storage">;
+    const storageId = img.storageId;
     const meta = await ctx.db.system.get(storageId);
     const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
     await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
@@ -175,6 +187,7 @@ export const generateImage = internalAction({
     originalImageId: v.id("images"),
     contentType: v.optional(v.string()),
   },
+  returns: v.null(),
   handler: async (ctx, args) => {
     const { storageId, originalImageId, contentType } = args;
 
@@ -339,5 +352,6 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
       }
     }
+    return null;
   },
 });

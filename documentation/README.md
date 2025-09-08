@@ -9,12 +9,14 @@ documentation/
 ├── README.md                    # This file - documentation standards
 ├── features/                    # Feature documentation
 │   ├── active/                 # Currently in-progress features
-│   │   ├── [feature-name]-spec.md     # Technical specification
-│   │   └── [feature-name]-progress.md # Implementation progress tracker
+│   │   ├── file-upload-progress.md    # File upload implementation progress
+│   │   └── file-upload-spec.md        # File upload technical specification
 │   ├── completed/              # Shipped features
-│   │   └── [feature-name]/    # Archived feature documentation
+│   │   ├── image-processing-fixes/    # Image processing architecture fixes
+│   │   ├── image-sharing/             # Image sharing feature
+│   │   └── share-page-optimization/   # Share page optimization
 │   └── planned/                # Future features
-│       └── [feature-name]-spec.md     # Planned specifications
+│       └── file-upload-spec.md        # Planned file upload specifications
 └── architecture/               # System architecture docs (if needed)
 ```
 

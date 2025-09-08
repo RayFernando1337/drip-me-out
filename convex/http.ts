@@ -41,7 +41,11 @@ http.route({
     const storageId = await ctx.storage.store(blob);
 
     // Step 2: Save the storage ID to the database via a mutation
-    await ctx.runMutation(api.images.sendImage, { storageId });
+    await ctx.runMutation(api.images.createImage, { 
+      storageId,
+      isGenerated: false,
+      generationStatus: "pending"
+    });
 
     // Step 3: Return a response with the correct CORS headers
     return new Response(null, {

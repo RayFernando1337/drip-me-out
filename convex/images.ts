@@ -9,19 +9,28 @@ export const generateUploadUrl = mutation({
   },
 });
 
-export const sendImage = mutation({
+export const createImage = mutation({
   args: {
     storageId: v.id("_storage"),
     isGenerated: v.optional(v.boolean()),
-    originalImageId: v.optional(v.string()),
+    originalImageId: v.optional(v.id("images")),
+    generationStatus: v.optional(
+      v.union(
+        v.literal("pending"),
+        v.literal("processing"),
+        v.literal("completed"),
+        v.literal("failed")
+      )
+    ),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
     return await ctx.db.insert("images", {
-      body: args.storageId,
+      storageId: args.storageId,
       createdAt: Date.now(),
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
+      generationStatus: args.generationStatus,
     });
   },
 });
@@ -32,11 +41,18 @@ export const getImages = query({
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      storageId: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
@@ -51,7 +67,7 @@ export const getImages = query({
     const imagesWithUrls = await Promise.all(
       images.map(async (image) => ({
         ...image,
-        url: await ctx.storage.getUrl(image.body),
+        url: await ctx.storage.getUrl(image.storageId),
       }))
     );
 
@@ -68,11 +84,18 @@ export const getImageById = query({
     v.object({
       _id: v.id("images"),
       _creationTime: v.number(),
-      body: v.string(),
+      storageId: v.id("_storage"),
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.string()),
-      generationStatus: v.optional(v.string()),
+      originalImageId: v.optional(v.id("images")),
+      generationStatus: v.optional(
+        v.union(
+          v.literal("pending"),
+          v.literal("processing"),
+          v.literal("completed"),
+          v.literal("failed")
+        )
+      ),
       generationError: v.optional(v.string()),
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
@@ -94,7 +117,7 @@ export const getImageById = query({
       return null;
     }
 
-    const url = await ctx.storage.getUrl(image.body);
+    const url = await ctx.storage.getUrl(image.storageId);
     if (!url) return null;
 
     return {

@@ -5,37 +5,24 @@ import { useQuery } from "convex/react";
 import Image from "next/image";
 import { useState } from "react";
 import ImageModal from "./ImageModal";
-import { Button } from "./ui/button";
 
 // Infer the type from the actual query return type
 type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
 
 interface ImagePreviewProps {
   images?: ImageFromQuery[]; // Main image array using inferred type
-  uploadedImages?: ImageFromQuery[]; // Alias for backward compatibility
-  totalImages?: number; // Total count of all generated images
-  currentPage?: number; // Current page number for pagination
-  imagesPerPage?: number; // Number of images per page
-  onLoadMore?: () => void;
-  hasMore?: boolean;
-  isLoading?: boolean;
+  totalImages?: number; // Total count of all images
 }
 
 export default function ImagePreview({
   images = [],
-  uploadedImages = [],
   totalImages = 0,
-  currentPage = 0,
-  imagesPerPage = 12,
-  onLoadMore,
-  hasMore = false,
-  isLoading = false,
 }: ImagePreviewProps) {
   const [selectedImage, setSelectedImage] = useState<ImageFromQuery | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Use images prop if provided, otherwise fallback to uploadedImages for compatibility
-  const imagesToDisplay = images.length > 0 ? images : uploadedImages;
+  // Use images prop directly
+  const imagesToDisplay = images;
 
   const allImages = imagesToDisplay.map((img, index) => ({
     type: "uploaded" as const,
@@ -43,12 +30,12 @@ export default function ImagePreview({
     index,
   }));
 
-  if (allImages.length === 0 && !isLoading) {
+  if (allImages.length === 0) {
     return (
       <div className="flex items-center justify-center h-64 border-2 border-dashed border-accent/30 bg-muted/50 rounded-lg">
         <div className="text-center text-muted-foreground">
           <div className="text-6xl mb-4">🎨</div>
-          <p className="text-lg font-medium mb-2">No generated images yet</p>
+          <p className="text-lg font-medium mb-2">No images yet</p>
           <p className="text-sm">Upload or capture an image to see AI-generated versions</p>
         </div>
       </div>
@@ -59,8 +46,7 @@ export default function ImagePreview({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">
-          {totalImages} AI-generated image{totalImages !== 1 ? "s" : ""} ✨
-          {isLoading && " (loading...)"}
+          {totalImages} image{totalImages !== 1 ? "s" : ""} ✨
         </p>
       </div>
 
@@ -131,21 +117,6 @@ export default function ImagePreview({
         ))}
       </div>
 
-      {/* Load More Button */}
-      {hasMore && (
-        <div className="flex items-center justify-center py-6">
-          <Button size="sm" onClick={onLoadMore} disabled={isLoading} variant="outline">
-            {isLoading ? (
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                <span>Loading...</span>
-              </div>
-            ) : (
-              `Load More (${totalImages - allImages.length} remaining)`
-            )}
-          </Button>
-        </div>
-      )}
 
       <ImageModal
         image={selectedImage}
