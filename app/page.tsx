@@ -6,8 +6,7 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { Camera, Github, Upload } from "lucide-react";
-import Link from "next/link";
+import { Camera, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -15,49 +14,38 @@ export default function Home() {
   return (
     <>
       <Authenticated>
-        <div className="flex w-full justify-end p-2">
-          <UserButton />
-        </div>
         <Content />
       </Authenticated>
       <Unauthenticated>
         <div className="flex flex-col w-full min-h-screen">
           {/* Header for unauthenticated users */}
-          <header className="flex items-center justify-between w-full px-6 py-4 border-b border-border/20">
+          <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Transform objects into anime illustrations
               </p>
             </div>
-            <Link
-              href="https://github.com/michaelshimeles/drip-me-out"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-muted-foreground hover:text-foreground transition-colors"
-              aria-label="View source code on GitHub"
-            >
-              <Button variant="ghost" size="sm">
-                <Github className="w-4 h-4" />
-              </Button>
-            </Link>
+            <div className="text-sm text-muted-foreground">Sign in to start</div>
           </header>
 
           {/* Main content for unauthenticated users */}
-          <main className="flex-1 flex flex-col items-center justify-center gap-8 p-6 text-center">
-            <div className="space-y-6 max-w-2xl">
-              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center">
-                <Upload className="w-8 h-8 text-white" />
+          <main className="flex-1 flex flex-col items-center justify-center gap-12 p-6 text-center">
+            <div className="space-y-8 max-w-3xl">
+              <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-purple-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg breathe">
+                <Upload className="w-10 h-10 text-white" />
               </div>
-              <div className="space-y-4">
-                <h2 className="text-3xl font-semibold">Bring your photos to life</h2>
-                <p className="text-muted-foreground text-lg">
+              <div className="space-y-6">
+                <h2 className="text-3xl md:text-5xl font-semibold tracking-tight">
+                  Bring your photos to life
+                </h2>
+                <p className="text-muted-foreground text-lg md:text-xl leading-relaxed max-w-2xl mx-auto">
                   Transform objects in your photos into magical 2D anime illustrations. Sign in to
                   upload images and watch as everyday items come to life with whimsical anime charm!
                 </p>
               </div>
               <SignInButton>
-                <Button className="btn-primary px-8 py-4 text-base font-medium rounded-xl">
+                <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
                   Start Creating
                 </Button>
               </SignInButton>
@@ -85,11 +73,11 @@ function Content() {
   const [showDesktopCamera, setShowDesktopCamera] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Pagination state
+  // Pagination state - Load 16 images at a time (divisible by 4-column grid)
   const [paginationOpts, setPaginationOpts] = useState<{
     numItems: number;
     cursor: string | null;
-  }>({ numItems: 12, cursor: null });
+  }>({ numItems: 16, cursor: null });
   // Type for gallery images - infer from the paginated query
   type GalleryImageType = NonNullable<
     ReturnType<typeof useQuery<typeof api.images.getGalleryImagesPaginated>>
@@ -120,7 +108,7 @@ function Content() {
   const loadMoreImages = useCallback(() => {
     if (galleryResult?.continueCursor && !galleryResult.isDone) {
       setPaginationOpts({
-        numItems: 12,
+        numItems: 16,
         cursor: galleryResult.continueCursor,
       });
     }
@@ -128,7 +116,7 @@ function Content() {
 
   // Reset pagination when new images are uploaded
   const resetPagination = useCallback(() => {
-    setPaginationOpts({ numItems: 12, cursor: null });
+    setPaginationOpts({ numItems: 16, cursor: null });
     setAllGalleryImages([]);
   }, []);
 
@@ -324,8 +312,8 @@ function Content() {
 
   return (
     <div className="flex flex-col w-full min-h-screen">
-      {/* Proper Header with Navigation */}
-      <header className="flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
+      {/* Sticky Header with Auth */}
+      <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-6">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
@@ -349,17 +337,7 @@ function Content() {
             </Button>
           </div>
 
-          <Link
-            href="https://github.com/michaelshimeles/drip-me-out"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="View source code on GitHub"
-          >
-            <Button variant="ghost" size="sm">
-              <Github className="w-4 h-4" />
-            </Button>
-          </Link>
+          <UserButton />
         </div>
       </header>
 
@@ -367,95 +345,113 @@ function Content() {
       <main className="flex-1 flex flex-col">
         <div className="flex-1 px-6 py-6">
           {galleryImages.length === 0 && !hasActiveGenerations ? (
-            /* Empty State with Drag & Drop */
-            <div className="flex flex-col items-center justify-center h-full min-h-[400px] space-y-8">
-              <div className="text-center space-y-4 max-w-md">
-                <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center">
-                  <Upload className="w-8 h-8 text-white" />
+            /* Hero Empty State - Jony Ive Style */
+            <div className="flex flex-col items-center justify-center h-full min-h-[70vh] px-4">
+              {/* Inspiring Header */}
+              <div className="text-center space-y-6 mb-12 max-w-2xl">
+                <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-purple-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg breathe">
+                  <Upload className="w-10 h-10 text-white" />
                 </div>
-                <div>
-                  <h2 className="text-2xl font-semibold mb-2">Bring your photos to life</h2>
-                  <p className="text-muted-foreground">
+                <div className="space-y-3">
+                  <h2 className="text-3xl md:text-4xl font-semibold tracking-tight">
+                    Bring your photos to life
+                  </h2>
+                  <p className="text-muted-foreground text-lg leading-relaxed">
                     Upload any image and watch objects transform into beautiful anime illustrations
                   </p>
                 </div>
               </div>
 
-              {/* Beautiful Drag & Drop Zone */}
-              <div className="w-full max-w-2xl">
+              {/* Prominent Hero Drop Zone */}
+              <div className="w-full max-w-4xl">
                 <div
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={`
-                    relative border-2 border-dashed rounded-2xl p-8 md:p-12 transition-all duration-200
+                    hero-drop-zone min-h-[280px] md:min-h-[360px] 
+                    border-2 border-dashed rounded-3xl 
+                    transition-all duration-300 ease-out cursor-pointer
+                    ${!isPreparing && !isUploading ? "breathe" : ""}
                     ${
                       isDragOver
-                        ? "border-primary bg-primary/5 scale-[1.02]"
-                        : "border-border hover:border-primary/50 hover:bg-muted/30"
+                        ? "border-primary bg-gradient-to-br from-primary/10 to-purple-500/10 scale-[1.01] shadow-xl"
+                        : "border-border/40 hover:border-primary/40 hover:shadow-lg"
                     }
-                    ${isPreparing || isUploading ? "opacity-50 pointer-events-none" : ""}
+                    ${isPreparing || isUploading ? "opacity-50 cursor-not-allowed" : ""}
                   `}
                 >
-                  <div className="text-center space-y-6">
-                    <div className="space-y-2">
-                      <Upload
-                        className={`w-8 h-8 mx-auto transition-colors ${isDragOver ? "text-primary" : "text-muted-foreground"}`}
-                      />
-                      <div className="space-y-1">
-                        <p
-                          className={`font-medium transition-colors ${isDragOver ? "text-primary" : "text-foreground"}`}
-                        >
-                          {isDragOver ? "Drop your image here" : "Drag and drop your image"}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          or click to browse • JPEG, PNG, HEIC supported
-                        </p>
+                  {/* Background gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-muted/20 rounded-3xl pointer-events-none" />
+
+                  <div className="relative flex flex-col items-center justify-center h-full p-8 md:p-16">
+                    {isPreparing || isUploading ? (
+                      <div className="text-center space-y-4">
+                        <div className="w-12 h-12 mx-auto border-3 border-primary border-t-transparent rounded-full animate-spin" />
+                        <div className="space-y-2">
+                          <p className="font-medium text-foreground">
+                            {isPreparing ? "Preparing image..." : "Uploading..."}
+                          </p>
+                          <p className="text-sm text-muted-foreground">This may take a moment</p>
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Hidden file input */}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/heic,image/heif"
-                      ref={imageInput}
-                      onChange={(event) => {
-                        setUploadError(null);
-                        const file = event.target.files?.[0];
-                        if (file) {
-                          uploadImage(file);
-                        }
-                      }}
-                      disabled={isPreparing || isUploading}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                    />
-
-                    {(isPreparing || isUploading) && (
-                      <div className="space-y-2">
-                        <div className="w-8 h-8 mx-auto border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                        <p className="text-sm text-muted-foreground">
-                          {isPreparing ? "Preparing image..." : "Uploading..."}
-                        </p>
+                    ) : (
+                      <div className="text-center space-y-6">
+                        <Upload
+                          className={`w-12 h-12 mx-auto transition-all duration-300 ${
+                            isDragOver ? "text-primary scale-110" : "text-muted-foreground"
+                          }`}
+                        />
+                        <div className="space-y-3">
+                          <p
+                            className={`text-xl md:text-2xl font-semibold transition-colors ${
+                              isDragOver ? "text-primary" : "text-foreground"
+                            }`}
+                          >
+                            {isDragOver ? "Drop your image here" : "Drag and drop your image"}
+                          </p>
+                          <p className="text-muted-foreground">
+                            or click anywhere to browse • JPEG, PNG, HEIC supported
+                          </p>
+                        </div>
                       </div>
                     )}
                   </div>
+
+                  {/* Full-area file input */}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/heic,image/heif"
+                    ref={imageInput}
+                    onChange={(event) => {
+                      setUploadError(null);
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        uploadImage(file);
+                      }
+                    }}
+                    disabled={isPreparing || isUploading}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
                 </div>
 
-                {/* Mobile Camera Option */}
-                <div className="flex items-center justify-center mt-6 md:hidden">
+                {/* Subtle Camera Option */}
+                <div className="flex items-center justify-center mt-8">
                   <button
                     type="button"
                     onClick={() => setShowMobileCamera(!showMobileCamera)}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors py-2 px-4 rounded-lg hover:bg-muted/50"
                   >
                     <Camera className="w-4 h-4" />
-                    {showMobileCamera ? "Hide camera" : "Use camera instead"}
+                    <span className="text-sm font-medium">
+                      {showMobileCamera ? "Hide camera" : "Use camera instead"}
+                    </span>
                   </button>
                 </div>
 
                 {/* Mobile Camera */}
                 {showMobileCamera && (
-                  <div className="mt-6 p-4 bg-muted/30 rounded-lg md:hidden">
+                  <div className="mt-8 p-6 bg-muted/20 rounded-2xl border border-border/30">
                     <Webcam onCapture={handleImageCapture} isUploading={isCapturing} />
                   </div>
                 )}
@@ -464,49 +460,77 @@ function Content() {
           ) : (
             /* Gallery Display */
             <div className="space-y-6">
-              {/* Gallery Header with Upload */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-semibold">Your Transformations</h2>
-                  <p className="text-sm text-muted-foreground">
-                    {totalImagesCount} images transformed
-                  </p>
+              {/* Gallery Header with Prominent Upload */}
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-xl font-semibold">Your Transformations</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {totalImagesCount} images transformed
+                    </p>
+                  </div>
                 </div>
 
-                {/* Quick Upload & Desktop Camera */}
-                <div className="flex items-center gap-3">
-                  <div
-                    onDragOver={handleDragOver}
-                    onDragLeave={handleDragLeave}
-                    onDrop={handleDrop}
-                    className={`
-                      relative border border-dashed rounded-lg p-3 transition-colors
-                      ${isDragOver ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}
-                    `}
-                  >
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/heic,image/heif"
-                      aria-label="Upload another image"
-                      onChange={(event) => {
-                        setUploadError(null);
-                        const file = event.target.files?.[0];
-                        if (file) {
-                          uploadImage(file);
-                        }
-                      }}
-                      disabled={isPreparing || isUploading}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <div className="flex items-center gap-2 text-sm text-muted-foreground pointer-events-none">
-                      <Upload className="w-4 h-4" />
-                      {isPreparing
-                        ? "Preparing..."
-                        : isUploading
-                          ? "Uploading..."
-                          : "Drop or click"}
-                    </div>
+                {/* Prominent Gallery Drop Zone */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`
+                    gallery-drop-zone w-full h-24 md:h-24 
+                    border-2 border-dashed rounded-2xl 
+                    transition-all duration-300 ease-out cursor-pointer
+                    ${
+                      isDragOver
+                        ? "border-primary bg-gradient-to-r from-primary/15 to-blue-500/15 scale-[1.01] shadow-lg"
+                        : "border-border/50 hover:border-primary/60 hover:shadow-md"
+                    }
+                    ${isPreparing || isUploading ? "opacity-50 cursor-not-allowed" : ""}
+                  `}
+                >
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    {isPreparing || isUploading ? (
+                      <div className="flex items-center gap-3">
+                        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                        <span className="font-medium text-foreground">
+                          {isPreparing ? "Preparing..." : "Uploading..."}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <Upload
+                          className={`w-5 h-5 transition-all duration-300 ${
+                            isDragOver ? "text-primary scale-110" : "text-muted-foreground"
+                          }`}
+                        />
+                        <span
+                          className={`font-medium transition-colors ${
+                            isDragOver ? "text-primary" : "text-foreground"
+                          }`}
+                        >
+                          {isDragOver
+                            ? "Drop your image here"
+                            : "Drop image here or click to browse"}
+                        </span>
+                      </div>
+                    )}
                   </div>
+
+                  {/* Full-area file input */}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/heic,image/heif"
+                    aria-label="Upload another image"
+                    onChange={(event) => {
+                      setUploadError(null);
+                      const file = event.target.files?.[0];
+                      if (file) {
+                        uploadImage(file);
+                      }
+                    }}
+                    disabled={isPreparing || isUploading}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                  />
                 </div>
               </div>
 

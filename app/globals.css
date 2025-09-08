@@ -231,6 +231,45 @@
     @apply focus:outline-none focus:ring-2 focus:ring-[--color-system-blue]/20 
            focus:border-[--color-system-blue] transition-all duration-200;
   }
+
+  /* Jony Ive-inspired Drop Zones */
+  .hero-drop-zone {
+    @apply relative overflow-hidden;
+  }
+
+  .hero-drop-zone::before {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-br from-transparent via-primary/5 to-purple-500/5 
+           opacity-0 transition-opacity duration-500 pointer-events-none;
+  }
+
+  .hero-drop-zone:hover::before {
+    @apply opacity-100;
+  }
+
+  .gallery-drop-zone {
+    @apply relative overflow-hidden;
+  }
+
+  .gallery-drop-zone::after {
+    content: '';
+    @apply absolute inset-0 bg-gradient-to-r from-transparent via-primary/3 to-transparent 
+           opacity-0 transition-opacity duration-300 pointer-events-none;
+  }
+
+  .gallery-drop-zone:hover::after {
+    @apply opacity-100;
+  }
+
+  /* Subtle breathing animation for empty states */
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+  }
+
+  .breathe {
+    animation: breathe 4s ease-in-out infinite;
+  }
 }
 
 /* Loading skeleton animations */
