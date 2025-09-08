@@ -1,5 +1,5 @@
 import { httpRouter } from "convex/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { httpAction } from "./_generated/server";
 
 const http = httpRouter();
@@ -36,23 +36,36 @@ http.route({
   path: "/sendImage",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
-    // Step 1: Store the file
-    const blob = await request.blob();
-    const storageId = await ctx.storage.store(blob);
+    try {
+      // 1) Store file in Convex storage
+      const blob = await request.blob();
+      const storageId = await ctx.storage.store(blob);
 
-    // Step 2: Save the storage ID to the database via a mutation
-    await ctx.runMutation(api.images.sendImage, { storageId });
+      // 2) Create original image in DB with pending and schedule processing
+      const originalImageId = await ctx.runMutation(api.generate.scheduleImageGeneration, {
+        storageId,
+      });
 
-    // Step 3: Return a response with the correct CORS headers
-    return new Response(null, {
-      status: 200,
-      // CORS headers
-      headers: new Headers({
-        // e.g. https://mywebsite.com, configured on your Convex dashboard
-        "Access-Control-Allow-Origin": "*",
-        Vary: "origin",
-      }),
-    });
+      // 3) Respond with IDs for client reference
+      return new Response(JSON.stringify({ storageId, originalImageId }), {
+        status: 200,
+        headers: new Headers({
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          Vary: "origin",
+        }),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload failed";
+      return new Response(JSON.stringify({ error: message }), {
+        status: 400,
+        headers: new Headers({
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+          Vary: "origin",
+        }),
+      });
+    }
   }),
 });
 

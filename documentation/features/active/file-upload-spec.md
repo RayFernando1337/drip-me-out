@@ -51,7 +51,7 @@ flowchart LR
 ```
 
 Key integration points:
-- Page UI: [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L283-L324)  
+- Page UI: [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L239-L315)  
 - Storage & queries: [convex/images.ts](file:///Users/ray/workspace/drip-me-out/convex/images.ts#L1-L62)  
 - Generation + scheduling: [convex/generate.ts](file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L82-L120, file:///Users/ray/workspace/drip-me-out/convex/generate.ts#L122-L279)
 
@@ -75,11 +75,15 @@ Key integration points:
 - Helper module: [lib/imagePrep.ts](file:///Users/ray/workspace/drip-me-out/lib/imagePrep.ts#L1-L58)
 
 ```ts
-// inside handleSendImage before generateUploadUrl
+// inside handleSendImage before scheduling
 const { prepareImageForUpload } = await import("@/lib/imagePrep");
+const { uploadAndSchedule } = await import("@/lib/uploadAndSchedule");
 const { file: prepared } = await prepareImageForUpload(selectedImage);
-const uploadUrl = await generateUploadUrl();
-await fetch(uploadUrl, { method: "POST", headers: { "Content-Type": prepared.type }, body: prepared });
+await uploadAndSchedule(prepared, generateUploadUrl, (args) =>
+  scheduleImageGeneration({
+    storageId: args.storageId as unknown as import("@/convex/_generated/dataModel").Id<"_storage">,
+  })
+);
 ```
 
 ### Server-side validation (Convex)

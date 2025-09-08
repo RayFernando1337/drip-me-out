@@ -74,8 +74,9 @@ C) Keep the UI busy state more explicit
 ## Action Items
 
 - [x] ImagePreview supports a placeholder state for `generationStatus` in { pending, processing } (see overlay at [components/ImagePreview.tsx](file:///Users/ray/workspace/drip-me-out/components/ImagePreview.tsx#L105-L116)).
-- [x] Update page data flow to include pending items and exclude failed from main gallery at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86); pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L95-L115), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L400-L408).
-- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L329-L391) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L176-L217).
+- [x] Update page data flow to include pending items and exclude failed from main gallery at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L75-L86); pagination/effects updated at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L95-L115), and gallery props at [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L455-L463).
+- [x] Add Retry button and inline helper text on upload error; regenerate signed URL on retry in [Upload form UI](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L378-L406) and [retryUpload handler](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L184-L225).
+- [x] DRY upload flows by reusing `lib/uploadAndSchedule.ts` in both webcam capture and file upload paths (see [app/page.tsx](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L268-L315)).
 - [x] Optional: add preparation progress state ("Preparing…") in [Upload button label](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L366-L373). Upload progress remains a follow-up.
 - [x] Hide backend/internal errors (e.g., AI quota) behind generic, user-friendly copy; see [toUserMessage mapper](file:///Users/ray/workspace/drip-me-out/app/page.tsx#L137-L147).
 - [x] DRY upload/schedule flow with helper: [lib/uploadAndSchedule.ts](file:///Users/ray/workspace/drip-me-out/lib/uploadAndSchedule.ts#L1-L64), used in camera + upload paths.

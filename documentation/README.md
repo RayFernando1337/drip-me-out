@@ -107,3 +107,12 @@ The main `/CLAUDE.md` file should reference this documentation structure but NOT
 - Follow the patterns established in completed features
 
 This keeps CLAUDE.md files stable and focused on coding patterns while feature documentation remains dynamic.
+
+## Recent Changes
+
+- Unified image upload pipeline for webcam and file uploads. Both flows now:
+  - Upload to Convex Storage via signed URL
+  - Call `convex/generate.scheduleImageGeneration` which validates type/size, creates an original with `generationStatus: "pending"`, and schedules `internal.generate.generateImage`
+  - Update status reactively from `pending` → `processing` → `completed`/`failed`
+- Frontend uses a shared helper `lib/uploadAndSchedule.ts` to avoid duplication.
+- HTTP endpoint `/sendImage` now stores file and calls `scheduleImageGeneration`, returning JSON `{ storageId, originalImageId }`.
