@@ -104,10 +104,14 @@ export default defineSchema({
     .index("by_generation_status", ["generationStatus"]) // ✅ EXISTING - Used for filtering
     .index("by_is_generated_and_status", ["isGenerated", "generationStatus"]) // ✅ EXISTING - Compound index
     .index("by_sharing_enabled", ["sharingEnabled"]) // ✅ EXISTING - Used for sharing
-    // 🆕 NEW INDEXES TO ADD:
-    .index("by_user", ["userId"]) // Find images by user
-    .index("by_featured", ["isFeatured"]) // Find featured images
-    .index("by_featured_date", ["isFeatured", "featuredAt"]), // Featured images by date
+    // 🆕 NEW INDEXES TO ADD (follow naming + no-filter rules):
+    .index("by_userId", ["userId"]) // Find images by user
+    .index("by_isFeatured", ["isFeatured"]) // Find featured images
+    .index("by_isFeatured_and_featuredAt", ["isFeatured", "featuredAt"]) // Featured images by date
+    .index(
+      "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
+      ["isFeatured", "isDisabledByAdmin", "featuredAt"]
+    ), // Public query: eq featured + eq not disabled + order by featuredAt
 });
 ```
 
@@ -122,6 +126,66 @@ export default defineSchema({
 
 ### Phase 2: Public Gallery Backend
 
+#### Shared validators and helpers (REUSE)
+
+To make queries/mutations concise and consistent, define shared validators and small helpers.
+
+```ts
+// convex/lib/validators.ts
+import { v } from "convex/values";
+
+export const GalleryItemValidator = v.object({
+  _id: v.id("images"),
+  _creationTime: v.number(),
+  body: v.id("_storage"),
+  createdAt: v.number(),
+  url: v.string(),
+  userId: v.optional(v.string()),
+  isFeatured: v.optional(v.boolean()),
+});
+
+export const PaginatedGalleryValidator = v.object({
+  page: v.array(GalleryItemValidator),
+  isDone: v.boolean(),
+  continueCursor: v.union(v.string(), v.null()),
+});
+
+// convex/lib/images.ts
+import type { Id } from "./_generated/dataModel";
+
+export async function mapImagesToUrls<T extends { body: Id<"_storage"> }>(
+  ctx: any,
+  docs: Array<T>
+) {
+  const urls = await Promise.all(docs.map((d) => ctx.storage.getUrl(d.body)));
+  return docs
+    .map((d, i) => (urls[i] ? { ...d, url: urls[i] as string } : null))
+    .filter((x): x is T & { url: string } => x !== null);
+}
+
+// convex/lib/auth.ts
+export async function requireIdentity(ctx: any) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) throw new Error("Not authenticated");
+  return identity;
+}
+
+export async function assertOwner(ctx: any, ownerId: string | undefined) {
+  const identity = await requireIdentity(ctx);
+  if (!ownerId || ownerId !== identity.subject) {
+    throw new Error("Not authorized to modify this image");
+  }
+  return identity;
+}
+
+export async function assertAdmin(ctx: any) {
+  const identity = await requireIdentity(ctx);
+  const isAdmin = identity.publicMetadata?.isAdmin === true;
+  if (!isAdmin) throw new Error("Not authorized - admin only");
+  return identity;
+}
+```
+
 #### Public Query Implementation
 
 **REUSE EXISTING**: We can extend the existing `getGalleryImagesPaginated` query pattern and batch URL generation logic from `convex/images.ts`.
@@ -133,50 +197,22 @@ export const getPublicGallery = query({
     paginationOpts: paginationOptsValidator, // ✅ REUSE - Already imported
   },
   // ✅ REUSE - Same return type pattern as getGalleryImagesPaginated
-  returns: v.object({
-    page: v.array(
-      v.object({
-        _id: v.id("images"),
-        _creationTime: v.number(),
-        body: v.id("_storage"),
-        createdAt: v.number(),
-        url: v.string(),
-        userId: v.optional(v.string()), // Clerk user ID
-        isFeatured: v.optional(v.boolean()),
-      })
-    ),
-    isDone: v.boolean(),
-    continueCursor: v.union(v.string(), v.null()),
-  }),
+  returns: PaginatedGalleryValidator, // from convex/lib/validators
   handler: async (ctx, args) => {
-    // ✅ REUSE - Follow existing index-based query pattern (avoid filters per Convex rules)
+    // ✅ REUSE - Follow index-based query pattern (no .filter() per Convex rules)
     const result = await ctx.db
       .query("images")
-      .withIndex("by_featured", (q) => q.eq("isFeatured", true))
-      .filter((q) => q.neq(q.field("isDisabledByAdmin"), true)) // Only exception - admin moderation filter
+      .withIndex(
+        "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
+        (q) => q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      )
       .order("desc")
       .paginate(args.paginationOpts);
 
-    // ✅ REUSE - Batch URL generation pattern from existing queries
-    const storageIds = result.page.map((img) => img.body);
-    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
-
-    // ✅ REUSE - Efficient URL mapping pattern
-    const imagesWithUrls = result.page.map((image, index) => ({
-      _id: image._id,
-      _creationTime: image._creationTime,
-      body: image.body,
-      createdAt: image.createdAt,
-      userId: image.userId,
-      isFeatured: image.isFeatured,
-      url: urls[index],
-    }));
-
-    // ✅ REUSE - URL filtering pattern
+    // ✅ REUSE - Batch URL generation via helper
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
     return {
-      page: imagesWithUrls.filter(
-        (image): image is typeof image & { url: string } => image.url !== null
-      ),
+      page: imagesWithUrls,
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
@@ -379,19 +415,7 @@ export default function PublicGallery() {
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-
-// ✅ REUSE - DRY admin check helper (follows Convex rules)
-async function checkAdminAuth(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) throw new Error("Not authenticated");
-  
-  // ✅ REUSE - Use Clerk user metadata instead of separate users table
-  // Admin status can be set via Clerk Dashboard or API
-  const isAdmin = identity.publicMetadata?.isAdmin === true;
-  if (!isAdmin) throw new Error("Not authorized - admin only");
-  
-  return identity;
-}
+import { assertAdmin } from "./lib/auth"; // ✅ REUSE - centralized auth helper
 
 export const disableFeaturedImage = mutation({
   args: {
@@ -400,7 +424,7 @@ export const disableFeaturedImage = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await checkAdminAuth(ctx); // ✅ REUSE - DRY auth check
+    await assertAdmin(ctx); // ✅ REUSE - DRY auth check
     
     // ✅ REUSE - Same patch pattern as existing updateShareSettings
     await ctx.db.patch(args.imageId, {
@@ -418,7 +442,7 @@ export const enableFeaturedImage = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await checkAdminAuth(ctx); // ✅ REUSE - DRY auth check
+    await assertAdmin(ctx); // ✅ REUSE - DRY auth check
     
     // ✅ REUSE - Same patch pattern as existing mutations
     await ctx.db.patch(args.imageId, {
@@ -453,37 +477,21 @@ export const getAdminFeaturedImages = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    await checkAdminAuth(ctx); // ✅ REUSE - DRY auth check
+    await assertAdmin(ctx); // ✅ REUSE - DRY auth check
     
     // ✅ REUSE - Same query pattern as getPublicGallery
     const result = await ctx.db
       .query("images")
-      .withIndex("by_featured", (q) => q.eq("isFeatured", true))
+      .withIndex("by_isFeatured_and_featuredAt", (q) => q.eq("isFeatured", true))
       .order("desc")
       .paginate(args.paginationOpts);
 
     // ✅ REUSE - Same batch URL generation pattern
-    const storageIds = result.page.map((img) => img.body);
-    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
-
-    // ✅ REUSE - Same URL mapping pattern
-    const imagesWithUrls = result.page.map((image, index) => ({
-      _id: image._id,
-      _creationTime: image._creationTime,
-      body: image.body,
-      createdAt: image.createdAt,
-      userId: image.userId,
-      isFeatured: image.isFeatured,
-      isDisabledByAdmin: image.isDisabledByAdmin,
-      disabledByAdminReason: image.disabledByAdminReason,
-      url: urls[index],
-    }));
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
 
     // ✅ REUSE - Same URL filtering pattern
     return {
-      page: imagesWithUrls.filter(
-        (image): image is typeof image & { url: string } => image.url !== null
-      ),
+      page: imagesWithUrls,
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
@@ -775,17 +783,10 @@ export const updateFeaturedStatus = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    // ✅ REUSE - Same auth and ownership check as updateShareSettings
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
     const image = await ctx.db.get(args.imageId);
     if (!image) throw new Error("Image not found");
-    
-    // Only allow the owner to toggle featured status (unless admin override)
-    if (image.userId !== identity.subject) {
-      throw new Error("Not authorized to modify this image");
-    }
+    // ✅ REUSE - Centralized ownership check
+    await assertOwner(ctx, image.userId);
 
     // ✅ REUSE - Same patch pattern as existing mutations
     await ctx.db.patch(args.imageId, {
