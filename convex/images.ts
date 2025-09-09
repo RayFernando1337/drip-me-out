@@ -2,6 +2,9 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import { mapImagesToUrls } from "./lib/images";
+import { assertOwner } from "./lib/auth";
+import { PaginatedGalleryValidator } from "./lib/validators";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -35,6 +38,10 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
+    // Track user via existing Clerk auth
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject; // Clerk user ID
+
     // Create the original image record with pending status
     const originalImageId = await ctx.db.insert("images", {
       body: storageId,
@@ -42,6 +49,9 @@ export const uploadAndScheduleGeneration = mutation({
       isGenerated: false,
       generationStatus: "pending" as const,
       generationAttempts: 0,
+      // Add user tracking fields
+      userId, // Track Clerk user ID
+      isFeatured: false, // Default to not featured
     });
 
     // Schedule the image generation immediately
@@ -473,6 +483,56 @@ export const updateShareSettings = mutation({
     }
 
     await ctx.db.patch(imageId, updateData);
+    return null;
+  },
+});
+
+// Public gallery query for unauthenticated users
+export const getPublicGallery = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: PaginatedGalleryValidator,
+  handler: async (ctx, args) => {
+    // Use index-based query (no .filter() per Convex rules)
+    const result = await ctx.db
+      .query("images")
+      .withIndex(
+        "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
+        (q) => q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    // Batch URL generation via helper
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
+    return {
+      page: imagesWithUrls,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Update featured status for user's images
+export const updateFeaturedStatus = mutation({
+  args: {
+    imageId: v.id("images"),
+    isFeatured: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+    
+    // Check ownership using centralized auth helper
+    await assertOwner(ctx, image.userId);
+
+    // Update featured status
+    await ctx.db.patch(args.imageId, {
+      isFeatured: args.isFeatured,
+      featuredAt: args.isFeatured ? Date.now() : undefined,
+    });
     return null;
   },
 });
