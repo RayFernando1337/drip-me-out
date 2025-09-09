@@ -31,6 +31,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
 
   // Update state when image prop changes
   useEffect(() => {
@@ -103,6 +104,15 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
       toast.success("Expiration updated");
     } catch {
       toast.error("Failed to update expiration");
+    }
+  };
+
+  const handleFeaturedToggle = async (enabled: boolean) => {
+    try {
+      await updateFeaturedStatus({ imageId: image?._id as Id<"images">, isFeatured: enabled });
+      toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
+    } catch (e) {
+      toast.error("Failed to update featured status");
     }
   };
 
@@ -220,6 +230,27 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                   <p className="text-sm text-muted-foreground">
                     When sharing is disabled, your image link will not be accessible to others.
                   </p>
+                )}
+
+                {/* Featured toggle */}
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1 text-left">
+                    <label className="text-sm font-medium">Feature in Public Gallery</label>
+                    <p className="text-xs text-muted-foreground">
+                      Showcase your transformation to inspire others
+                    </p>
+                  </div>
+                  <Switch
+                    checked={(image as any).isFeatured === true && (image as any).isDisabledByAdmin !== true}
+                    onCheckedChange={handleFeaturedToggle}
+                    disabled={(image as any).isDisabledByAdmin === true}
+                  />
+                </div>
+
+                {(image as any).isDisabledByAdmin && (image as any).disabledByAdminReason && (
+                  <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                    <strong>Admin Note:</strong> {(image as any).disabledByAdminReason}
+                  </div>
                 )}
               </div>
             )}

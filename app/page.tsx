@@ -1,6 +1,7 @@
 "use client";
 import ImagePreview from "@/components/ImagePreview";
 import { Button } from "@/components/ui/button";
+import PublicGallery from "@/components/PublicGallery";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -43,6 +44,11 @@ export default function Home() {
                   Transform objects in your photos into magical 2D anime illustrations. Sign in to
                   upload images and watch as everyday items come to life with whimsical anime charm!
                 </p>
+              </div>
+
+              {/* Public Gallery Showcase */}
+              <div className="w-full max-w-7xl">
+                <PublicGallery />
               </div>
               <SignInButton>
                 <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
