@@ -31,12 +31,16 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const [isFeatured, setIsFeatured] = useState(image?.isFeatured || false);
 
   // Update state when image prop changes
   useEffect(() => {
     setSharingEnabled(image?.sharingEnabled !== false);
-  }, [image?.sharingEnabled]);
+    setIsFeatured(image?.isFeatured || false);
+  }, [image?.sharingEnabled, image?.isFeatured]);
+  
   const updateShareSettings = useMutation(api.images.updateShareSettings);
+  const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
 
   if (!image) return null;
 
@@ -103,6 +107,20 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
       toast.success("Expiration updated");
     } catch {
       toast.error("Failed to update expiration");
+    }
+  };
+
+  const handleFeaturedToggle = async (enabled: boolean) => {
+    setIsFeatured(enabled);
+    try {
+      await updateFeaturedStatus({
+        imageId: image._id as Id<"images">,
+        isFeatured: enabled,
+      });
+      toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
+    } catch {
+      toast.error("Failed to update featured status");
+      setIsFeatured(!enabled); // Revert on error
     }
   };
 
@@ -194,6 +212,35 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                     checked={sharingEnabled}
                     onCheckedChange={handleSharingToggle}
                   />
+                </div>
+
+                {/* Featured toggle */}
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <label htmlFor="featured-toggle" className="text-sm font-medium">
+                        Feature in Public Gallery
+                      </label>
+                      <p className="text-xs text-muted-foreground">
+                        {image.isDisabledByAdmin 
+                          ? "This image was disabled by an admin and cannot be featured"
+                          : "Showcase your transformation to inspire others"
+                        }
+                      </p>
+                    </div>
+                    <Switch
+                      id="featured-toggle"
+                      checked={isFeatured && !image.isDisabledByAdmin}
+                      onCheckedChange={handleFeaturedToggle}
+                      disabled={image.isDisabledByAdmin}
+                    />
+                  </div>
+                  
+                  {image.isDisabledByAdmin && image.disabledByAdminReason && (
+                    <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
+                      <strong>Admin Note:</strong> {image.disabledByAdminReason}
+                    </div>
+                  )}
                 </div>
 
                 {sharingEnabled && (
