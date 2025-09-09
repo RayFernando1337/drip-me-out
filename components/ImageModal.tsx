@@ -31,6 +31,8 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
+  const [isUpdatingFeatured, setIsUpdatingFeatured] = useState(false);
 
   // Update state when image prop changes
   useEffect(() => {
@@ -50,6 +52,19 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       toast.error("Failed to copy link");
+    }
+  };
+
+  const handleFeaturedToggle = async (enabled: boolean) => {
+    if (!image) return;
+    setIsUpdatingFeatured(true);
+    try {
+      await updateFeaturedStatus({ imageId: image._id as Id<"images">, isFeatured: enabled });
+      toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
+    } catch {
+      toast.error("Failed to update featured status");
+    } finally {
+      setIsUpdatingFeatured(false);
     }
   };
 
@@ -221,6 +236,28 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                     When sharing is disabled, your image link will not be accessible to others.
                   </p>
                 )}
+
+                {/* Featured toggle */}
+                <div className="pt-2 border-t mt-2">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1 text-left">
+                      <label className="text-sm font-medium">Feature in Public Gallery</label>
+                      <p className="text-xs text-muted-foreground">
+                        Showcase your transformation to inspire others
+                      </p>
+                    </div>
+                    <Switch
+                      checked={!!image.isFeatured && !image.isDisabledByAdmin}
+                      onCheckedChange={handleFeaturedToggle}
+                      disabled={!!image.isDisabledByAdmin || isUpdatingFeatured}
+                    />
+                  </div>
+                  {image.isDisabledByAdmin && image.disabledByAdminReason && (
+                    <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded mt-2 text-left">
+                      <strong>Admin Note:</strong> {image.disabledByAdminReason}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

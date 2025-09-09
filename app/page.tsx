@@ -9,6 +9,7 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { Camera, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import PublicGallery from "@/components/PublicGallery";
 
 export default function Home() {
   return (
@@ -43,6 +44,11 @@ export default function Home() {
                   Transform objects in your photos into magical 2D anime illustrations. Sign in to
                   upload images and watch as everyday items come to life with whimsical anime charm!
                 </p>
+              </div>
+
+              {/* Public gallery showcase */}
+              <div className="w-full max-w-7xl text-left">
+                <PublicGallery />
               </div>
               <SignInButton>
                 <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">

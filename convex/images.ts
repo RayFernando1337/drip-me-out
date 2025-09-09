@@ -2,6 +2,9 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import { PaginatedGalleryValidator } from "./lib/validators";
+import { mapImagesToUrls } from "./lib/images";
+import { assertOwner } from "./lib/auth";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -35,13 +38,19 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
-    // Create the original image record with pending status
+    // Capture current user identity for ownership tracking
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+
+    // Create the original image record with pending status and user tracking
     const originalImageId = await ctx.db.insert("images", {
       body: storageId,
       createdAt: Date.now(),
       isGenerated: false,
       generationStatus: "pending" as const,
       generationAttempts: 0,
+      userId,
+      isFeatured: false,
     });
 
     // Schedule the image generation immediately
@@ -306,6 +315,52 @@ export const getGalleryImagesPaginated = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// Public: Featured images for unauthenticated gallery (paginated)
+export const getPublicGallery = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: PaginatedGalleryValidator,
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("images")
+      .withIndex(
+        "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
+        (q) => q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
+    return {
+      page: imagesWithUrls,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Allow image owners to toggle featured status
+export const updateFeaturedStatus = mutation({
+  args: {
+    imageId: v.id("images"),
+    isFeatured: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+
+    await assertOwner(ctx, image.userId);
+
+    await ctx.db.patch(args.imageId, {
+      isFeatured: args.isFeatured,
+      featuredAt: args.isFeatured ? Date.now() : undefined,
+    });
+    return null;
   },
 });
 
