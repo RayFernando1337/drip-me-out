@@ -35,6 +35,10 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
+    // Track user identity (Clerk) if available
+    const identity = await ctx.auth.getUserIdentity();
+    const userId: string | undefined = identity?.subject;
+
     // Create the original image record with pending status
     const originalImageId = await ctx.db.insert("images", {
       body: storageId,
@@ -42,6 +46,9 @@ export const uploadAndScheduleGeneration = mutation({
       isGenerated: false,
       generationStatus: "pending" as const,
       generationAttempts: 0,
+      // Ownership & featured defaults
+      userId,
+      isFeatured: false,
     });
 
     // Schedule the image generation immediately
@@ -249,6 +256,8 @@ export const getGalleryImagesPaginated = query({
         generationAttempts: v.optional(v.number()),
         sharingEnabled: v.optional(v.boolean()),
         shareExpiresAt: v.optional(v.number()),
+        userId: v.optional(v.string()),
+        isFeatured: v.optional(v.boolean()),
         url: v.string(),
       })
     ),
@@ -306,6 +315,78 @@ export const getGalleryImagesPaginated = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// Public gallery: featured and not disabled, ordered by featuredAt desc
+export const getPublicGallery = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        _id: v.id("images"),
+        _creationTime: v.number(),
+        body: v.id("_storage"),
+        createdAt: v.number(),
+        url: v.string(),
+        userId: v.optional(v.string()),
+        isFeatured: v.optional(v.boolean()),
+      })
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    const result = await ctx.db
+      .query("images")
+      .withIndex(
+        "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
+        (q) => q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      )
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    if (result.page.length === 0) {
+      return { page: [], isDone: result.isDone, continueCursor: result.continueCursor };
+    }
+
+    const urls = await Promise.all(result.page.map((d) => ctx.storage.getUrl(d.body)));
+    const withUrls = result.page
+      .map((d, i) => (urls[i] ? { ...d, url: urls[i] as string } : null))
+      .filter((x): x is typeof result.page[number] & { url: string } => x !== null);
+
+    return {
+      page: withUrls,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Toggle featured status by owner; update featuredAt when enabling
+export const updateFeaturedStatus = mutation({
+  args: {
+    imageId: v.id("images"),
+    isFeatured: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    if (!image.userId || image.userId !== identity.subject) {
+      throw new Error("Not authorized to modify this image");
+    }
+
+    await ctx.db.patch(args.imageId, {
+      isFeatured: args.isFeatured,
+      featuredAt: args.isFeatured ? Date.now() : undefined,
+    });
+    return null;
   },
 });
 
