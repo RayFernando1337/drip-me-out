@@ -73,11 +73,12 @@ export const getPublicGallery = query({
   },
   returns: PaginatedGalleryValidator,
   handler: async (ctx, args) => {
-    // Backward-compatible: some legacy featured docs may not have isDisabledByAdmin set.
-    // Use the featured+featuredAt index to surface featured items regardless of missing flag.
+    // Exclude admin-disabled items using compound index
     const result = await ctx.db
       .query("images")
-      .withIndex("by_isFeatured_and_featuredAt", (q) => q.eq("isFeatured", true))
+      .withIndex("by_isFeatured_and_isDisabledByAdmin_and_featuredAt", (q) =>
+        q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      )
       .order("desc")
       .paginate(args.paginationOpts);
 
