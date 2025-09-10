@@ -37,8 +37,13 @@ export default defineSchema({
     .index("by_userId", ["userId"]) // find by owner
     .index("by_isFeatured", ["isFeatured"]) // basic featured flag
     .index("by_isFeatured_and_featuredAt", ["isFeatured", "featuredAt"]) // sort by featured date
-    .index(
-      "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
-      ["isFeatured", "isDisabledByAdmin", "featuredAt"]
-    ),
+    .index("by_isFeatured_and_isDisabledByAdmin_and_featuredAt", [
+      "isFeatured",
+      "isDisabledByAdmin",
+      "featuredAt",
+    ]),
+  admins: defineTable({
+    userId: v.string(), // Clerk subject
+    createdAt: v.number(),
+  }).index("by_userId", ["userId"]),
 });
