@@ -160,11 +160,16 @@ export const getAdminFeaturedImages = query({
         _creationTime: v.number(),
         body: v.id("_storage"),
         createdAt: v.number(),
+        featuredAt: v.optional(v.number()),
         url: v.string(),
         userId: v.optional(v.string()),
         isFeatured: v.optional(v.boolean()),
         isDisabledByAdmin: v.optional(v.boolean()),
         disabledByAdminReason: v.optional(v.string()),
+        // extra fields that may be present on images
+        isGenerated: v.optional(v.boolean()),
+        originalImageId: v.optional(v.id("images")),
+        disabledByAdminAt: v.optional(v.number()),
       })
     ),
     isDone: v.boolean(),
