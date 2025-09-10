@@ -20,6 +20,11 @@ import { toast } from "sonner";
 
 // Infer the type from the actual query return type
 type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
+type ImageWithFeatured = ImageFromQuery & {
+  isFeatured?: boolean;
+  isDisabledByAdmin?: boolean;
+  disabledByAdminReason?: string;
+};
 
 interface ImageModalProps {
   image: ImageFromQuery | null;
@@ -31,12 +36,15 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const [isFeatured, setIsFeatured] = useState<boolean>(((image as ImageWithFeatured | null)?.isFeatured) === true);
 
   // Update state when image prop changes
   useEffect(() => {
     setSharingEnabled(image?.sharingEnabled !== false);
-  }, [image?.sharingEnabled]);
+    setIsFeatured(((image as ImageWithFeatured | null)?.isFeatured) === true);
+  }, [image]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
+  const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
 
   if (!image) return null;
 
@@ -48,7 +56,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
       setCopied(true);
       toast.success("Link copied to clipboard!");
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
+    } catch {
       toast.error("Failed to copy link");
     }
   };
@@ -58,6 +66,20 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     const text = "Check out my AI-generated diamond chain photo! 💎⛓️";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");
+  };
+
+  const handleFeaturedToggle = async (enabled: boolean) => {
+    setIsFeatured(enabled);
+    try {
+      await updateFeaturedStatus({
+        imageId: image._id as Id<"images">,
+        isFeatured: enabled,
+      });
+      toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
+    } catch {
+      toast.error("Failed to update featured status");
+      setIsFeatured(!enabled);
+    }
   };
 
   const handleNativeShare = async () => {
@@ -70,7 +92,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
           text: "Check out my AI-generated diamond chain!",
           url: shareUrl,
         });
-      } catch (err) {
+      } catch {
         // User cancelled or error - do nothing
         console.log("Share cancelled");
       }
@@ -221,6 +243,20 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                     When sharing is disabled, your image link will not be accessible to others.
                   </p>
                 )}
+
+                {/* Feature in public gallery */}
+                <div className="flex items-center justify-between pt-2">
+                  <div className="space-y-1 text-left">
+                    <label className="text-sm font-medium">Feature in Public Gallery</label>
+                    <p className="text-xs text-muted-foreground">
+                      Showcase your transformation to inspire others
+                    </p>
+                  </div>
+                  <Switch
+                    checked={isFeatured}
+                    onCheckedChange={handleFeaturedToggle}
+                  />
+                </div>
               </div>
             )}
           </div>

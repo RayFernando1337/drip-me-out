@@ -3,7 +3,7 @@
 **Document Name:** Public Gallery for Unauthenticated Users Implementation Plan  
 **Date:** January 27, 2025  
 **Version:** 1.0  
-**Status:** Planned
+**Status:** Finalized
 
 ## Executive Summary
 
@@ -69,6 +69,30 @@ flowchart LR
 - **Frontend**: Gallery component reuse with unauthenticated state
 - **User Tracking**: Link images to users for proper ownership
 - **Privacy**: Simple featured toggle for public display
+
+## Validation Outcomes (September 10, 2025)
+
+This spec has been validated against the current codebase and is already implemented with DRY reuse across backend and frontend:
+
+- Backend
+  - Schema and indexes present in `convex/schema.ts`: `userId`, `isFeatured`, `featuredAt`, `isDisabledByAdmin`, and compound index `by_isFeatured_and_isDisabledByAdmin_and_featuredAt` (plus supporting indexes) are implemented.
+  - Public gallery query implemented in `convex/images.ts` as `getPublicGallery`, using `paginationOptsValidator`, the compound index above, and `order("desc")` by `featuredAt`.
+  - Featured toggle mutation implemented as `updateFeaturedStatus` reusing centralized ownership checks; includes a legacy backfill path when `userId` is missing.
+  - Shared helpers and validators exist: `convex/lib/images.ts` (`mapImagesToUrls`) and `convex/lib/validators.ts` (`GalleryItemValidator`, `PaginatedGalleryValidator`).
+  - Admin moderation implemented in `convex/admin.ts`: `disableFeaturedImage`, `enableFeaturedImage`, and `getAdminFeaturedImages` with URL mapping reuse.
+
+- Frontend
+  - `components/PublicGallery.tsx` implements grid + load-more pattern consistent with `components/ImagePreview.tsx`.
+  - `app/page.tsx` integrates `PublicGallery` into the unauthenticated landing section.
+  - `components/ImageModal.tsx` includes a "Feature in Public Gallery" toggle wired to `api.images.updateFeaturedStatus` following the same UX as sharing.
+
+- Decisions and constraints
+  - URL mapping uses the shared `mapImagesToUrls` helper (confirmed and reused).
+  - Ordering: strictly by `featuredAt` descending via the compound index to preserve DRY, index-friendly pagination. Ensure `featuredAt` is set whenever `isFeatured` is enabled (already handled in `updateFeaturedStatus`). No fallback to `createdAt` is required.
+  - Admin moderation is in scope and implemented; no rate limiting added (deferred).
+  - No new ad-hoc pagination or API shapes; types align with existing gallery validators.
+
+Minimal follow-ups (optional): If legacy records exist with `isFeatured === true` but missing `featuredAt`, use the existing toggle to re-set, or add a one-off admin maintenance task to backfill `featuredAt`.
 
 ## Detailed Design
 
@@ -202,9 +226,8 @@ export const getPublicGallery = query({
     // ✅ REUSE - Follow index-based query pattern (no .filter() per Convex rules)
     const result = await ctx.db
       .query("images")
-      .withIndex(
-        "by_isFeatured_and_isDisabledByAdmin_and_featuredAt",
-        (q) => q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
+      .withIndex("by_isFeatured_and_isDisabledByAdmin_and_featuredAt", (q) =>
+        q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
       )
       .order("desc")
       .paginate(args.paginationOpts);
@@ -366,7 +389,7 @@ export default function PublicGallery() {
             upload images and watch as everyday items come to life with whimsical anime charm!
           </p>
         </div>
-        
+
         {/* 🆕 ADD - Public gallery showcase */}
         <div className="w-full max-w-7xl">
           <PublicGallery />
@@ -425,7 +448,7 @@ export const disableFeaturedImage = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertAdmin(ctx); // ✅ REUSE - DRY auth check
-    
+
     // ✅ REUSE - Same patch pattern as existing updateShareSettings
     await ctx.db.patch(args.imageId, {
       isDisabledByAdmin: true,
@@ -443,7 +466,7 @@ export const enableFeaturedImage = mutation({
   returns: v.null(),
   handler: async (ctx, args) => {
     await assertAdmin(ctx); // ✅ REUSE - DRY auth check
-    
+
     // ✅ REUSE - Same patch pattern as existing mutations
     await ctx.db.patch(args.imageId, {
       isDisabledByAdmin: false,
@@ -478,7 +501,7 @@ export const getAdminFeaturedImages = query({
   }),
   handler: async (ctx, args) => {
     await assertAdmin(ctx); // ✅ REUSE - DRY auth check
-    
+
     // ✅ REUSE - Same query pattern as getPublicGallery
     const result = await ctx.db
       .query("images")
@@ -601,8 +624,8 @@ export default function AdminModerationDashboard() {
         {featuredImages?.page.map((image) => (
           <div key={image._id} className="group">
             <div className={`bg-card border transition-all duration-200 overflow-hidden rounded-xl shadow-sm ${
-              image.isDisabledByAdmin 
-                ? "border-red-500 bg-red-50 dark:bg-red-900/20" 
+              image.isDisabledByAdmin
+                ? "border-red-500 bg-red-50 dark:bg-red-900/20"
                 : "border-border/30 hover:border-border hover:shadow-md"
             }`}>
               <div className="aspect-square relative">
@@ -632,7 +655,7 @@ export default function AdminModerationDashboard() {
                 <div className="text-xs text-muted-foreground">
                   User: {image.userId || "Unknown"}
                 </div>
-                
+
                 {image.isDisabledByAdmin && image.disabledByAdminReason && (
                   <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
                     <strong>Disabled:</strong> {image.disabledByAdminReason}
@@ -736,7 +759,7 @@ export default function AdminModerationDashboard() {
     <div className="space-y-1">
       <label className="text-sm font-medium">Feature in Public Gallery</label>
       <p className="text-xs text-muted-foreground">
-        {image.isDisabledByAdmin 
+        {image.isDisabledByAdmin
           ? "This image was disabled by an admin and cannot be featured"
           : "Showcase your transformation to inspire others"
         }
@@ -748,7 +771,7 @@ export default function AdminModerationDashboard() {
       disabled={image.isDisabledByAdmin}
     />
   </div>
-  
+
   {image.isDisabledByAdmin && image.disabledByAdminReason && (
     <div className="text-xs text-red-600 bg-red-50 dark:bg-red-900/20 p-2 rounded">
       <strong>Admin Note:</strong> {image.disabledByAdminReason}

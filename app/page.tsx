@@ -1,5 +1,6 @@
 "use client";
 import ImagePreview from "@/components/ImagePreview";
+import PublicGallery from "@/components/PublicGallery";
 import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
@@ -44,6 +45,11 @@ export default function Home() {
                   upload images and watch as everyday items come to life with whimsical anime charm!
                 </p>
               </div>
+              {/* Public gallery showcase */}
+              <div className="w-full max-w-7xl">
+                <PublicGallery />
+              </div>
+
               <SignInButton>
                 <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
                   Start Creating

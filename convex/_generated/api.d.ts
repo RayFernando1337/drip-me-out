@@ -13,9 +13,13 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as admin from "../admin.js";
 import type * as generate from "../generate.js";
 import type * as http from "../http.js";
 import type * as images from "../images.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as lib_images from "../lib/images.js";
+import type * as lib_validators from "../lib/validators.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -26,9 +30,13 @@ import type * as images from "../images.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  admin: typeof admin;
   generate: typeof generate;
   http: typeof http;
   images: typeof images;
+  "lib/auth": typeof lib_auth;
+  "lib/images": typeof lib_images;
+  "lib/validators": typeof lib_validators;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

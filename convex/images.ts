@@ -2,6 +2,9 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
+import { assertOwner } from "./lib/auth";
+import { mapImagesToUrls } from "./lib/images";
+import { PaginatedGalleryValidator } from "./lib/validators";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -35,6 +38,10 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
+    // Track user identity if available (Clerk)
+    const identity = await ctx.auth.getUserIdentity();
+    const userId = identity?.subject;
+
     // Create the original image record with pending status
     const originalImageId = await ctx.db.insert("images", {
       body: storageId,
@@ -42,6 +49,10 @@ export const uploadAndScheduleGeneration = mutation({
       isGenerated: false,
       generationStatus: "pending" as const,
       generationAttempts: 0,
+      // Ownership + public gallery defaults
+      userId,
+      isFeatured: false,
+      isDisabledByAdmin: false,
     });
 
     // Schedule the image generation immediately
@@ -52,6 +63,60 @@ export const uploadAndScheduleGeneration = mutation({
     });
 
     return originalImageId;
+  },
+});
+
+// Public featured gallery (unauthenticated)
+export const getPublicGallery = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: PaginatedGalleryValidator,
+  handler: async (ctx, args) => {
+    // Backward-compatible: some legacy featured docs may not have isDisabledByAdmin set.
+    // Use the featured+featuredAt index to surface featured items regardless of missing flag.
+    const result = await ctx.db
+      .query("images")
+      .withIndex("by_isFeatured_and_featuredAt", (q) => q.eq("isFeatured", true))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
+    return {
+      page: imagesWithUrls,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Toggle featured status (owner only)
+export const updateFeaturedStatus = mutation({
+  args: {
+    imageId: v.id("images"),
+    isFeatured: v.boolean(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+    // Backward-compat: older images may not have userId set.
+    // If missing, claim ownership to the current user before proceeding.
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    if (!image.userId) {
+      await ctx.db.patch(args.imageId, { userId: identity.subject });
+    } else {
+      await assertOwner(ctx, image.userId);
+    }
+
+    await ctx.db.patch(args.imageId, {
+      isFeatured: args.isFeatured,
+      featuredAt: args.isFeatured ? Date.now() : undefined,
+      // Ensure disabled flag is explicitly false when enabling
+      ...(args.isFeatured ? { isDisabledByAdmin: false } : {}),
+    });
+    return null;
   },
 });
 
@@ -95,6 +160,13 @@ export const getGalleryImages = query({
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
       shareExpiresAt: v.optional(v.number()),
+      // Optional public gallery + ownership fields
+      userId: v.optional(v.string()),
+      isFeatured: v.optional(v.boolean()),
+      featuredAt: v.optional(v.number()),
+      isDisabledByAdmin: v.optional(v.boolean()),
+      disabledByAdminAt: v.optional(v.number()),
+      disabledByAdminReason: v.optional(v.string()),
       url: v.string(),
     })
   ),
@@ -171,6 +243,12 @@ export const getFailedImages = query({
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
       shareExpiresAt: v.optional(v.number()),
+      userId: v.optional(v.string()),
+      isFeatured: v.optional(v.boolean()),
+      featuredAt: v.optional(v.number()),
+      isDisabledByAdmin: v.optional(v.boolean()),
+      disabledByAdminAt: v.optional(v.number()),
+      disabledByAdminReason: v.optional(v.string()),
       url: v.string(),
     })
   ),
@@ -249,6 +327,12 @@ export const getGalleryImagesPaginated = query({
         generationAttempts: v.optional(v.number()),
         sharingEnabled: v.optional(v.boolean()),
         shareExpiresAt: v.optional(v.number()),
+        userId: v.optional(v.string()),
+        isFeatured: v.optional(v.boolean()),
+        featuredAt: v.optional(v.number()),
+        isDisabledByAdmin: v.optional(v.boolean()),
+        disabledByAdminAt: v.optional(v.number()),
+        disabledByAdminReason: v.optional(v.string()),
         url: v.string(),
       })
     ),
@@ -366,6 +450,12 @@ export const getImages = query({
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
       shareExpiresAt: v.optional(v.number()),
+      userId: v.optional(v.string()),
+      isFeatured: v.optional(v.boolean()),
+      featuredAt: v.optional(v.number()),
+      isDisabledByAdmin: v.optional(v.boolean()),
+      disabledByAdminAt: v.optional(v.number()),
+      disabledByAdminReason: v.optional(v.string()),
       url: v.string(),
     })
   ),
@@ -425,6 +515,12 @@ export const getImageById = query({
       generationAttempts: v.optional(v.number()),
       sharingEnabled: v.optional(v.boolean()),
       shareExpiresAt: v.optional(v.number()),
+      userId: v.optional(v.string()),
+      isFeatured: v.optional(v.boolean()),
+      featuredAt: v.optional(v.number()),
+      isDisabledByAdmin: v.optional(v.boolean()),
+      disabledByAdminAt: v.optional(v.number()),
+      disabledByAdminReason: v.optional(v.string()),
       url: v.string(),
     }),
     v.null()
