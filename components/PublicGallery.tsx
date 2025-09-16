@@ -4,9 +4,10 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import PublicImageModal from "./PublicImageModal";
 
 type PublicQueryResult = ReturnType<typeof useQuery<typeof api.images.getPublicGallery>>;
-type PublicGalleryImage = NonNullable<NonNullable<PublicQueryResult>["page"]>[number];
+export type PublicGalleryImage = NonNullable<NonNullable<PublicQueryResult>["page"]>[number];
 
 export default function PublicGallery() {
   const [paginationOpts, setPaginationOpts] = useState<{ numItems: number; cursor: string | null }>(
@@ -18,6 +19,8 @@ export default function PublicGallery() {
     isDone: boolean;
   }>({ continueCursor: null, isDone: false });
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<PublicGalleryImage | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const galleryResult: PublicQueryResult = useQuery(api.images.getPublicGallery, { paginationOpts });
   useEffect(() => {
@@ -44,9 +47,27 @@ export default function PublicGallery() {
     setIsLoadingMore(false);
   }, [galleryResult, paginationOpts.cursor]);
 
+  useEffect(() => {
+    if (!selectedImage) return;
+    const updated = images.find((img) => img._id === selectedImage._id);
+    if (updated && updated !== selectedImage) {
+      setSelectedImage(updated);
+    }
+  }, [images, selectedImage]);
+
   const hasNoImagesYet = images.length === 0;
   const isInitialLoading = hasNoImagesYet && galleryResult === undefined;
   const showLoadMore = Boolean(latestPaginationState.continueCursor) && !latestPaginationState.isDone;
+
+  const openModal = (image: PublicGalleryImage) => {
+    setSelectedImage(image);
+    setIsModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setIsModalOpen(false);
+    setSelectedImage(null);
+  };
 
   if (isInitialLoading) {
     return (
@@ -67,7 +88,13 @@ export default function PublicGallery() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {images.map((image) => (
-          <div key={image._id} className="group">
+          <button
+            key={image._id}
+            type="button"
+            onClick={() => openModal(image)}
+            className="group block text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background rounded-xl"
+            aria-label="View featured transformation"
+          >
             <div className="bg-card border border-border/30 hover:border-border transition-all duration-200 overflow-hidden rounded-xl shadow-sm hover:shadow-md">
               <div className="aspect-square relative">
                 <Image
@@ -101,7 +128,7 @@ export default function PublicGallery() {
                 </div>
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
@@ -120,6 +147,8 @@ export default function PublicGallery() {
           </Button>
         </div>
       )}
+
+      <PublicImageModal image={selectedImage} isOpen={isModalOpen} onClose={closeModal} />
     </div>
   );
 }
