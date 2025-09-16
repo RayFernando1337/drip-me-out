@@ -1,21 +1,54 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
 type PublicQueryResult = ReturnType<typeof useQuery<typeof api.images.getPublicGallery>>;
+type PublicGalleryImage = NonNullable<NonNullable<PublicQueryResult>["page"]>[number];
 
 export default function PublicGallery() {
   const [paginationOpts, setPaginationOpts] = useState<{ numItems: number; cursor: string | null }>(
     { numItems: 16, cursor: null }
   );
+  const [images, setImages] = useState<PublicGalleryImage[]>([]);
+  const [latestPaginationState, setLatestPaginationState] = useState<{
+    continueCursor: string | null;
+    isDone: boolean;
+  }>({ continueCursor: null, isDone: false });
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const galleryResult: PublicQueryResult = useQuery(api.images.getPublicGallery, { paginationOpts });
-  const images = useMemo(() => galleryResult?.page || [], [galleryResult?.page]);
+  useEffect(() => {
+    if (!galleryResult || !galleryResult.page) {
+      return;
+    }
 
-  if (images.length === 0 && galleryResult === undefined) {
+    setImages((prev) => {
+      const shouldReset = paginationOpts.cursor === null;
+      const baseline = shouldReset ? [] : prev;
+      const deduped = new Map(baseline.map((image) => [image._id, image]));
+
+      for (const image of galleryResult.page) {
+        deduped.set(image._id, image);
+      }
+
+      return Array.from(deduped.values());
+    });
+
+    setLatestPaginationState({
+      continueCursor: galleryResult.continueCursor ?? null,
+      isDone: galleryResult.isDone,
+    });
+    setIsLoadingMore(false);
+  }, [galleryResult, paginationOpts.cursor]);
+
+  const hasNoImagesYet = images.length === 0;
+  const isInitialLoading = hasNoImagesYet && galleryResult === undefined;
+  const showLoadMore = Boolean(latestPaginationState.continueCursor) && !latestPaginationState.isDone;
+
+  if (isInitialLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="w-6 h-6 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
@@ -72,18 +105,21 @@ export default function PublicGallery() {
         ))}
       </div>
 
-      {galleryResult?.continueCursor && !galleryResult.isDone && (
+      {showLoadMore && (
         <div className="flex items-center justify-center py-8">
           <Button
-            onClick={() => setPaginationOpts({ numItems: 16, cursor: galleryResult.continueCursor })}
+            onClick={() => {
+              setIsLoadingMore(true);
+              setPaginationOpts({ numItems: 16, cursor: latestPaginationState.continueCursor });
+            }}
             variant="ghost"
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            disabled={isLoadingMore}
           >
-            Show more examples
+            {isLoadingMore ? "Loading more…" : "Show more examples"}
           </Button>
         </div>
       )}
     </div>
   );
 }
-
