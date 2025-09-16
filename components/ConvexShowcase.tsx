@@ -14,7 +14,7 @@ import {
     Sparkles,
     Zap
 } from "lucide-react";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 interface ConvexFeature {
     icon: React.ReactNode;
@@ -28,9 +28,10 @@ interface ConvexFeature {
 
 export default function ConvexShowcase() {
     const [animatedFeatures, setAnimatedFeatures] = useState<number[]>([]);
-    const images = useQuery(api.images.getImages) || [];
+    const imagesData = useQuery(api.images.getImages);
+    const images = useMemo(() => imagesData || [], [imagesData]);
 
-    const features: ConvexFeature[] = [
+    const features: ConvexFeature[] = useMemo(() => [
         {
             icon: <Database className="w-8 h-8" />,
             title: "Convex Database",
@@ -150,7 +151,7 @@ const images = useQuery(api.images.getImages);`,
             category: "database",
             color: "from-rose-500 to-pink-500"
         }
-    ];
+    ], [images]);
 
     // Animate features on load
     useEffect(() => {
@@ -162,7 +163,7 @@ const images = useQuery(api.images.getImages);`,
             });
         }, 500);
         return () => clearTimeout(timer);
-    }, []);
+    }, [features]);
 
 
 

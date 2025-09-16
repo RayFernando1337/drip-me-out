@@ -1,7 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -13,9 +19,19 @@ import { Switch } from "@/components/ui/switch";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
-import { Check, ChevronDown, ChevronUp, Copy, Settings, Share2, X } from "lucide-react";
+import {
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  ChevronUp,
+  Copy,
+  Settings,
+  Share2,
+  X,
+} from "lucide-react";
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 
 // Infer the type from the actual query return type
@@ -27,33 +43,84 @@ type ImageWithFeatured = ImageFromQuery & {
 };
 
 interface ImageModalProps {
-  image: ImageFromQuery | null;
+  images: ImageFromQuery[];
+  selectedImageIndex: number | null;
   isOpen: boolean;
   onClose: () => void;
+  onImageIndexChange?: (index: number) => void;
 }
 
-export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) {
+export default function ImageModal({
+  images,
+  selectedImageIndex,
+  isOpen,
+  onClose,
+  onImageIndexChange,
+}: ImageModalProps) {
+  const currentImage = selectedImageIndex !== null ? images[selectedImageIndex] : null;
+
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
+  const [sharingEnabled, setSharingEnabled] = useState(currentImage?.sharingEnabled !== false);
   const [isFeatured, setIsFeatured] = useState<boolean>(
-    ((image as ImageWithFeatured | null)?.isFeatured) === true &&
-      ((image as ImageWithFeatured | null)?.isDisabledByAdmin !== true)
+    (currentImage as ImageWithFeatured | null)?.isFeatured === true &&
+      (currentImage as ImageWithFeatured | null)?.isDisabledByAdmin !== true
   );
 
   // Update state when image prop changes
   useEffect(() => {
-    setSharingEnabled(image?.sharingEnabled !== false);
-    const extended = image as ImageWithFeatured | null;
+    setSharingEnabled(currentImage?.sharingEnabled !== false);
+    const extended = currentImage as ImageWithFeatured | null;
     const lockedByAdmin = extended?.isDisabledByAdmin === true;
     setIsFeatured(extended?.isFeatured === true && !lockedByAdmin);
-  }, [image]);
+  }, [currentImage]);
+
+  // Navigation state helpers
+  const canNavigate = !!onImageIndexChange && selectedImageIndex !== null && images.length > 1;
+  const hasPrevious = canNavigate && (selectedImageIndex as number) > 0;
+  const hasNext = canNavigate && (selectedImageIndex as number) < images.length - 1;
+
+  // Navigation functions
+  const goToPrevious = useCallback(() => {
+    if (hasPrevious && onImageIndexChange) {
+      onImageIndexChange((selectedImageIndex as number) - 1);
+    }
+  }, [hasPrevious, onImageIndexChange, selectedImageIndex]);
+
+  const goToNext = useCallback(() => {
+    if (hasNext && onImageIndexChange) {
+      onImageIndexChange((selectedImageIndex as number) + 1);
+    }
+  }, [hasNext, onImageIndexChange, selectedImageIndex]);
+
+  // Keyboard navigation (only when navigation is enabled)
+  useEffect(() => {
+    if (!isOpen || !canNavigate) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      switch (event.key) {
+        case "ArrowLeft":
+          event.preventDefault();
+          goToPrevious();
+          break;
+        case "ArrowRight":
+          event.preventDefault();
+          goToNext();
+          break;
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, canNavigate, goToPrevious, goToNext]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
   const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
 
-  if (!image) return null;
+  if (!currentImage) return null;
 
-  const extendedImage = image as ImageWithFeatured;
+  const extendedImage = currentImage as ImageWithFeatured;
   const isAdminLocked = extendedImage?.isDisabledByAdmin === true;
   const adminLockReason = extendedImage?.disabledByAdminReason?.trim();
   const adminLockMessage = adminLockReason
@@ -61,7 +128,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     : "Removed by moderators. Contact support to request reinstatement.";
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/share/${image._id}`;
+    const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
 
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -74,7 +141,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   };
 
   const handleTwitterShare = () => {
-    const shareUrl = `${window.location.origin}/share/${image._id}`;
+    const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
     const text = "Check out my AI-generated diamond chain photo! 💎⛓️";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");
@@ -90,7 +157,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     setIsFeatured(enabled);
     try {
       await updateFeaturedStatus({
-        imageId: image._id as Id<"images">,
+        imageId: currentImage._id as Id<"images">,
         isFeatured: enabled,
       });
       toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
@@ -102,7 +169,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   };
 
   const handleNativeShare = async () => {
-    const shareUrl = `${window.location.origin}/share/${image._id}`;
+    const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
 
     if (navigator.share) {
       try {
@@ -122,7 +189,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     setSharingEnabled(enabled);
     try {
       await updateShareSettings({
-        imageId: image._id as Id<"images">,
+        imageId: currentImage._id as Id<"images">,
         sharingEnabled: enabled,
       });
       toast.success(enabled ? "Sharing enabled" : "Sharing disabled");
@@ -136,7 +203,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
     const hours = value === "never" ? 0 : parseInt(value);
     try {
       await updateShareSettings({
-        imageId: image._id as Id<"images">,
+        imageId: currentImage._id as Id<"images">,
         sharingEnabled: true,
         expirationHours: hours || undefined,
       });
@@ -148,8 +215,8 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   };
 
   const getExpirationValue = () => {
-    if (!image.shareExpiresAt) return "never";
-    const hoursLeft = Math.floor((image.shareExpiresAt - Date.now()) / (1000 * 60 * 60));
+    if (!currentImage.shareExpiresAt) return "never";
+    const hoursLeft = Math.floor((currentImage.shareExpiresAt - Date.now()) / (1000 * 60 * 60));
     if (hoursLeft <= 24) return "24";
     if (hoursLeft <= 168) return "168";
     if (hoursLeft <= 720) return "720";
@@ -163,7 +230,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
           <div className="relative flex-1 bg-black/5">
             <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
               <Image
-                src={image.url}
+                src={currentImage.url}
                 alt="Full size image"
                 fill
                 className="object-contain"
@@ -171,13 +238,47 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                 unoptimized={true}
                 priority={true}
               />
+
+              {/* Navigation buttons (only when navigation is enabled) */}
+              {hasPrevious && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="absolute left-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white border-0 rounded-full w-10 h-10 p-0 shadow-lg"
+                  onClick={goToPrevious}
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </Button>
+              )}
+
+              {hasNext && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 bg-black/50 hover:bg-black/70 text-white border-0 rounded-full w-10 h-10 p-0 shadow-lg"
+                  onClick={goToNext}
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </Button>
+              )}
+
+              {/* Image counter */}
+              {canNavigate && (
+                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/50 text-white px-3 py-1 rounded-full text-sm font-medium">
+                  {selectedImageIndex !== null
+                    ? `${selectedImageIndex + 1} of ${images.length}`
+                    : ""}
+                </div>
+              )}
             </div>
           </div>
           <div className="flex flex-1 flex-col bg-background md:w-[360px] md:max-w-sm md:border-l md:border-border/50">
             <DialogHeader className="space-y-2 px-6 pt-6 text-left">
               <DialogTitle>Image Preview</DialogTitle>
               <DialogDescription>
-                Created {new Date(image.createdAt).toLocaleDateString()}
+                Created {new Date(currentImage.createdAt).toLocaleDateString()}
               </DialogDescription>
             </DialogHeader>
 
@@ -281,9 +382,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                       />
                     </div>
                     {isAdminLocked && (
-                      <p className="text-xs text-destructive/80">
-                        {adminLockMessage}
-                      </p>
+                      <p className="text-xs text-destructive/80">{adminLockMessage}</p>
                     )}
                   </div>
                 )}

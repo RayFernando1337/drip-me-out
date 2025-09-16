@@ -20,7 +20,7 @@ export const StatusIndicator = ({
   className,
   ...props
 }: StatusIndicatorProps) => (
-  <span className="relative flex h-2 w-2" {...props}>
+  <span className={cn('relative flex h-2 w-2', className)} {...props}>
     <span
       className={cn(
         'absolute inline-flex h-full w-full animate-ping rounded-full opacity-75',
