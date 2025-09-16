@@ -1,6 +1,6 @@
 # Unauthenticated Gallery - Implementation Progress Tracker
 
-**Last Updated:** February 14, 2025  
+**Last Updated:** February 14, 2025 (Post-Phase III modal wiring)  
 **Specification:** [Unauthenticated Gallery Technical Specification](./unauthenticated-gallery-spec.md)
 
 ## Overview
@@ -9,18 +9,18 @@ The public gallery shipped once, but regression testing surfaced four critical g
 ## Phase Completion Summary
 | Phase | Status | Completion | Notes |
 |-------|--------|------------|-------|
-| Phase 1 – Stabilize public pagination | Planned | 0% | Persist accumulated pages client-side, update loading UX, and re-test infinite browsing.
-| Phase 2 – Enforce admin featured locks | Planned | 0% | Keep admin disables authoritative in Convex and reflect state in UI to prevent silent overrides.
-| Phase 3 – Add unauthenticated read-only modal | Planned | 0% | Introduce a lightweight modal/lightbox that omits sharing controls but supports swipe/keyboard navigation.
+| Phase 1 – Stabilize public pagination | Complete | 100% | Accumulate pages locally in `PublicGallery`, dedupe IDs, and expose loading state.
+| Phase 2 – Enforce admin featured locks | Complete | 100% | Mutation now preserves admin disables; modal toggle shows lock messaging.
+| Phase 3 – Add unauthenticated read-only modal | In Progress | 60% | `PublicImageModal` implemented and wired up; cross-device QA still pending.
 | Phase 4 – Fix responsive modal layout | Planned | 0% | Ensure feature/sharing controls stay visible for portrait/landscape images and small screens.
 
 ## Current Tasks
-- [ ] Phase 1: Cache previously fetched `getPublicGallery` pages in `components/PublicGallery.tsx`, guard against duplicate IDs, and confirm "Show more" continues appending results.
-- [ ] Phase 1 Testing: Manually verify pagination on desktop + mobile breakpoints, then run `bunx convex dev` (no validation/schema errors) and `bun run build`.
-- [ ] Phase 2: Update `api.images.updateFeaturedStatus` + related UI so admin-disabled images cannot be re-enabled by owners without moderation approval.
-- [ ] Phase 2 Testing: Exercise owner/admin flows end-to-end, rerun `bunx convex dev`, and `bun run build` to confirm Convex + TypeScript health.
-- [ ] Phase 3: Build a read-only `PublicImageModal` (or reuse existing modal with feature flags) and wire it to `PublicGallery` cards with accessible focus management.
-- [ ] Phase 3 Testing: Validate modal navigation on keyboard and touch, ensure no auth-only controls leak, then run `bunx convex dev` and `bun run build`.
+- [x] Phase 1: Cache previously fetched `getPublicGallery` pages in `components/PublicGallery.tsx`, guard against duplicate IDs, and confirm "Show more" continues appending results.
+- [ ] Phase 1 Testing: Manually verify pagination on desktop + mobile breakpoints, then run `bunx convex dev` (no validation/schema errors) and `bun run build`. *(Build + Convex checks completed; manual cross-device sweep still recommended.)*
+- [x] Phase 2: Update `api.images.updateFeaturedStatus` + related UI so admin-disabled images cannot be re-enabled by owners without moderation approval.
+- [ ] Phase 2 Testing: Exercise owner/admin flows end-to-end, rerun `bunx convex dev`, and `bun run build` to confirm Convex + TypeScript health. *(Automated checks pass; end-to-end owner/admin QA still pending.)*
+- [x] Phase 3: Build a read-only `PublicImageModal` (or reuse existing modal with feature flags) and wire it to `PublicGallery` cards with accessible focus management.
+- [ ] Phase 3 Testing: Validate modal navigation on keyboard and touch, ensure no auth-only controls leak, then run `bunx convex dev` and `bun run build`. *(Build/Convex checks pass; manual desktop/mobile sweep still outstanding.)*
 - [ ] Phase 4: Refactor modal layout to support scrollable content, responsive stacking, or adaptive sizing so controls stay within reach regardless of orientation.
 - [ ] Phase 4 Testing: Check portrait, landscape, and small-screen scenarios, confirm scroll/zoom behaviour, and finish with `bunx convex dev` plus `bun run build`.
 
@@ -29,5 +29,5 @@ The public gallery shipped once, but regression testing surfaced four critical g
 - After merging a phase, update this tracker (status + completion) before moving on.
 
 ## Blockers/Issues
-- Pagination, admin enforcement, modal absence, and responsive layout bugs outlined in the specification remain unresolved.
+- Responsive layout fixes for the authenticated modal remain outstanding; public modal still needs manual keyboard/touch QA before sign-off.
 - No external dependencies are blocking progress; fixes are confined to the existing frontend/Convex codepaths.

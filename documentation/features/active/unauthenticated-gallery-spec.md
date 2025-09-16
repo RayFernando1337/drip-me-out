@@ -94,12 +94,12 @@ Initial validation confirmed the end-to-end flow was implemented with DRY reuse 
 
 ## Active Issues (January 2025)
 
-Recent QA and code review uncovered functionality gaps that must be resolved during this active iteration:
+Recent QA and code review uncovered functionality gaps that must be resolved during this active iteration. Status is tracked below as the phases progress:
 
-- **Pagination regression**: `components/PublicGallery.tsx` discards previously loaded pages when "Show more" is clicked. Accumulate results locally so unauthenticated visitors can continue browsing.
-- **Admin override bypass**: `api.images.updateFeaturedStatus` clears `isDisabledByAdmin` whenever the owner re-features an image. Preserve the admin lock or surface a distinct flow to request reinstatement.
-- **Missing read-only modal**: The public gallery currently renders static cards. Add a lightweight modal/lightbox for unauthenticated users that omits sharing/feature controls but allows detailed viewing.
-- **Responsive layout bug**: When an image opens in the authenticated modal on narrow screens or with extreme portrait/landscape dimensions, the feature/sharing controls fall outside the viewport. Adjust the modal layout (scroll region, responsive stacking, or adaptive sizing) so all controls remain accessible without relying on oversized screens.
+- [Resolved] **Pagination regression** (Feb 14, 2025): `components/PublicGallery.tsx` now accumulates previously loaded pages, dedupes IDs, and keeps pagination state while loading.
+- [Resolved] **Admin override bypass** (Feb 14, 2025): `api.images.updateFeaturedStatus` preserves moderator disables and surfaces lock messaging in the authenticated modal.
+- [In progress] **Missing read-only modal**: `PublicImageModal` renders for unauthenticated viewers with a sign-in CTA; keyboard/touch regression pass still pending.
+- [Planned] **Responsive layout bug**: When an image opens in the authenticated modal on narrow screens or with extreme portrait/landscape dimensions, the feature/sharing controls fall outside the viewport. Adjust the modal layout (scroll region, responsive stacking, or adaptive sizing) so all controls remain accessible without relying on oversized screens.
 
 Backfill `featuredAt` for legacy records only if needed after the above fixes are complete.
 
