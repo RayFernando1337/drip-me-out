@@ -111,11 +111,18 @@ export const updateFeaturedStatus = mutation({
       await assertOwner(ctx, image.userId);
     }
 
+    if (image.isDisabledByAdmin && args.isFeatured) {
+      const reason = image.disabledByAdminReason?.trim();
+      throw new Error(
+        reason
+          ? `This image was removed by a moderator: ${reason}`
+          : "This image was removed by a moderator. Contact support to request reinstatement."
+      );
+    }
+
     await ctx.db.patch(args.imageId, {
       isFeatured: args.isFeatured,
       featuredAt: args.isFeatured ? Date.now() : undefined,
-      // Ensure disabled flag is explicitly false when enabling
-      ...(args.isFeatured ? { isDisabledByAdmin: false } : {}),
     });
     return null;
   },

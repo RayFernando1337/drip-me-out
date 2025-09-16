@@ -36,17 +36,29 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [sharingEnabled, setSharingEnabled] = useState(image?.sharingEnabled !== false);
-  const [isFeatured, setIsFeatured] = useState<boolean>(((image as ImageWithFeatured | null)?.isFeatured) === true);
+  const [isFeatured, setIsFeatured] = useState<boolean>(
+    ((image as ImageWithFeatured | null)?.isFeatured) === true &&
+      ((image as ImageWithFeatured | null)?.isDisabledByAdmin !== true)
+  );
 
   // Update state when image prop changes
   useEffect(() => {
     setSharingEnabled(image?.sharingEnabled !== false);
-    setIsFeatured(((image as ImageWithFeatured | null)?.isFeatured) === true);
+    const extended = image as ImageWithFeatured | null;
+    const lockedByAdmin = extended?.isDisabledByAdmin === true;
+    setIsFeatured(extended?.isFeatured === true && !lockedByAdmin);
   }, [image]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
   const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
 
   if (!image) return null;
+
+  const extendedImage = image as ImageWithFeatured;
+  const isAdminLocked = extendedImage?.isDisabledByAdmin === true;
+  const adminLockReason = extendedImage?.disabledByAdminReason?.trim();
+  const adminLockMessage = adminLockReason
+    ? `Removed by moderators: ${adminLockReason}`
+    : "Removed by moderators. Contact support to request reinstatement.";
 
   const handleShare = async () => {
     const shareUrl = `${window.location.origin}/share/${image._id}`;
@@ -69,6 +81,12 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
   };
 
   const handleFeaturedToggle = async (enabled: boolean) => {
+    if (isAdminLocked && enabled) {
+      setIsFeatured(false);
+      toast.error(adminLockMessage);
+      return;
+    }
+
     setIsFeatured(enabled);
     try {
       await updateFeaturedStatus({
@@ -76,8 +94,9 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
         isFeatured: enabled,
       });
       toast.success(enabled ? "Added to public gallery" : "Removed from public gallery");
-    } catch {
-      toast.error("Failed to update featured status");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to update featured status";
+      toast.error(message);
       setIsFeatured(!enabled);
     }
   };
@@ -255,8 +274,14 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                   <Switch
                     checked={isFeatured}
                     onCheckedChange={handleFeaturedToggle}
+                    disabled={isAdminLocked}
                   />
                 </div>
+                {isAdminLocked && (
+                  <p className="text-xs text-destructive/80">
+                    {adminLockMessage}
+                  </p>
+                )}
               </div>
             )}
           </div>
