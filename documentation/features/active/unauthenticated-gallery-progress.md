@@ -1,6 +1,6 @@
 # Unauthenticated Gallery - Implementation Progress Tracker
 
-**Last Updated:** February 14, 2025 (Post-Phase III modal wiring)  
+**Last Updated:** September 15, 2025 (Phase IV responsive modal layout)  
 **Specification:** [Unauthenticated Gallery Technical Specification](./unauthenticated-gallery-spec.md)
 
 ## Overview
@@ -11,8 +11,8 @@ The public gallery shipped once, but regression testing surfaced four critical g
 |-------|--------|------------|-------|
 | Phase 1 – Stabilize public pagination | Complete | 100% | Accumulate pages locally in `PublicGallery`, dedupe IDs, and expose loading state.
 | Phase 2 – Enforce admin featured locks | Complete | 100% | Mutation now preserves admin disables; modal toggle shows lock messaging.
-| Phase 3 – Add unauthenticated read-only modal | In Progress | 60% | `PublicImageModal` implemented and wired up; cross-device QA still pending.
-| Phase 4 – Fix responsive modal layout | Planned | 0% | Ensure feature/sharing controls stay visible for portrait/landscape images and small screens.
+| Phase 3 – Add unauthenticated read-only modal | Complete | 100% | `PublicImageModal` now uses split layout, scrollable copy, and CTA-only controls; keyboard/touch QA still recommended.
+| Phase 4 – Fix responsive modal layout | Complete | 100% | Both public and authenticated modals use flexible two-pane layouts so controls remain reachable on small screens and extreme aspect ratios.
 
 ## Current Tasks
 - [x] Phase 1: Cache previously fetched `getPublicGallery` pages in `components/PublicGallery.tsx`, guard against duplicate IDs, and confirm "Show more" continues appending results.
@@ -21,13 +21,12 @@ The public gallery shipped once, but regression testing surfaced four critical g
 - [ ] Phase 2 Testing: Exercise owner/admin flows end-to-end, rerun `bunx convex dev`, and `bun run build` to confirm Convex + TypeScript health. *(Automated checks pass; end-to-end owner/admin QA still pending.)*
 - [x] Phase 3: Build a read-only `PublicImageModal` (or reuse existing modal with feature flags) and wire it to `PublicGallery` cards with accessible focus management.
 - [ ] Phase 3 Testing: Validate modal navigation on keyboard and touch, ensure no auth-only controls leak, then run `bunx convex dev` and `bun run build`. *(Build/Convex checks pass; manual desktop/mobile sweep still outstanding.)*
-- [ ] Phase 4: Refactor modal layout to support scrollable content, responsive stacking, or adaptive sizing so controls stay within reach regardless of orientation.
-- [ ] Phase 4 Testing: Check portrait, landscape, and small-screen scenarios, confirm scroll/zoom behaviour, and finish with `bunx convex dev` plus `bun run build`.
+- [ ] Phase 4 Testing: Check portrait, landscape, and small-screen scenarios, confirm scroll/zoom behaviour, and finish with `bunx convex dev` plus `bun run build`. *(Responsive refactor committed; need exploratory QA.)*
 
 ## Next Steps
 - Tackle phases sequentially; each phase should leave the app deployable with pagination, moderation, and modal behaviour intact.
 - After merging a phase, update this tracker (status + completion) before moving on.
 
 ## Blockers/Issues
-- Responsive layout fixes for the authenticated modal remain outstanding; public modal still needs manual keyboard/touch QA before sign-off.
+- Manual cross-device QA for the refreshed modals (keyboard, screen reader, and touch) still needs to happen before sign-off.
 - No external dependencies are blocking progress; fixes are confined to the existing frontend/Convex codepaths.

@@ -98,8 +98,9 @@ Recent QA and code review uncovered functionality gaps that must be resolved dur
 
 - [Resolved] **Pagination regression** (Feb 14, 2025): `components/PublicGallery.tsx` now accumulates previously loaded pages, dedupes IDs, and keeps pagination state while loading.
 - [Resolved] **Admin override bypass** (Feb 14, 2025): `api.images.updateFeaturedStatus` preserves moderator disables and surfaces lock messaging in the authenticated modal.
-- [In progress] **Missing read-only modal**: `PublicImageModal` renders for unauthenticated viewers with a sign-in CTA; keyboard/touch regression pass still pending.
-- [Planned] **Responsive layout bug**: When an image opens in the authenticated modal on narrow screens or with extreme portrait/landscape dimensions, the feature/sharing controls fall outside the viewport. Adjust the modal layout (scroll region, responsive stacking, or adaptive sizing) so all controls remain accessible without relying on oversized screens.
+- [Resolved] **Missing read-only modal** (Sep 15, 2025): `PublicImageModal` now uses a split-pane layout with scrollable messaging and a sign-in CTA; manual keyboard/touch QA remains recommended before handoff.
+- [Resolved] **Responsive layout bug** (Sep 15, 2025): `PublicImageModal` and `components/ImageModal.tsx` share a responsive two-column layout so controls stay reachable on portrait images and small screens.
+- [QA] **Modal accessibility regression sweep**: Exercise keyboard, screen reader, and touch flows on the updated public + authenticated modals before sign-off.
 
 Backfill `featuredAt` for legacy records only if needed after the above fixes are complete.
 
@@ -415,6 +416,13 @@ export default function PublicGallery() {
   </div>
 </Unauthenticated>
 ```
+
+#### Public Modal Layout (Implemented Sep 2025)
+
+- `components/PublicImageModal.tsx` now mirrors the updated responsive spec: a flexible two-column layout keeps imagery and copy balanced on desktop, collapsing to stacked content on mobile.
+- The left pane is a `relative` container with a `next/image` `fill` that uses `object-contain`, so tall and wide images scale without overflowing the viewport.
+- The right rail holds the copy block and CTA inside a scrollable column (`overflow-y-auto`) so the "Sign in" button remains reachable even on 13" laptops and tall portrait assets.
+- Featured badge remains pinned in the media pane (`absolute top-4 left-4`) and the dialog uses `max-w-4xl` / `max-h-[90vh]` to stay within safe viewport bounds.
 
 ### Phase 4: User Management Interface
 
@@ -803,6 +811,13 @@ const handleFeaturedToggle = async (enabled: boolean) => {
   }
 };
 ```
+
+#### Responsive Modal Layout (Implemented Sep 2025)
+
+- `components/ImageModal.tsx` shares the same responsive principles as the public modal: `DialogContent` stretches to `max-w-5xl` with a `flex` container so imagery and controls stay side-by-side on desktop and stack on mobile.
+- The media pane uses a `fill` image with `object-contain`, ensuring extreme landscape or portrait shots never hide the settings column.
+- The settings pane (`overflow-y-auto`) contains share buttons, toggles, and the featured controls so the moderator lock message and switches remain accessible without scrolling the whole dialog.
+- Buttons retain their existing logic; only layout/styling changed, minimizing regression risk.
 
 **REUSE EXISTING**: We need to add one new mutation to `convex/images.ts` following the same pattern as `updateShareSettings`:
 

@@ -158,132 +158,134 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-4xl max-h-[90vh] p-0 overflow-hidden">
-        <DialogHeader className="p-4 pb-0">
-          <DialogTitle>Image Preview</DialogTitle>
-          <DialogDescription>
-            Created {new Date(image.createdAt).toLocaleDateString()}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="p-4">
-          <div
-            className="w-full rounded-lg mb-4 overflow-hidden"
-            style={{ maxHeight: "calc(90vh - 180px)" }}
-          >
-            <Image
-              src={image.url}
-              alt="Full size image"
-              width={800}
-              height={600}
-              className="w-full h-auto rounded-lg"
-              style={{ objectFit: "contain", maxHeight: "calc(90vh - 180px)" }}
-              unoptimized={true}
-              priority={true}
-            />
+      <DialogContent className="max-h-[90vh] max-w-5xl w-[min(96vw,960px)] overflow-y-auto p-0 md:overflow-hidden">
+        <div className="flex h-full flex-col md:max-h-[90vh] md:flex-row">
+          <div className="relative flex-1 bg-black/5">
+            <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
+              <Image
+                src={image.url}
+                alt="Full size image"
+                fill
+                className="object-contain"
+                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
+                unoptimized={true}
+                priority={true}
+              />
+            </div>
           </div>
-          <div className="flex justify-center gap-2">
-            <Button onClick={handleShare} className="flex items-center gap-2">
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? "Copied!" : "Copy Share Link"}
-            </Button>
-            <Button
-              onClick={handleTwitterShare}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <X className="w-4 h-4" />
-              Share on X
-            </Button>
-            {typeof navigator !== "undefined" && "share" in navigator && (
-              <Button
-                onClick={handleNativeShare}
-                variant="outline"
-                className="flex items-center gap-2"
-              >
-                <Share2 className="w-4 h-4" />
-                Share
-              </Button>
-            )}
-          </div>
+          <div className="flex flex-1 flex-col bg-background md:w-[360px] md:max-w-sm md:border-l md:border-border/50">
+            <DialogHeader className="space-y-2 px-6 pt-6 text-left">
+              <DialogTitle>Image Preview</DialogTitle>
+              <DialogDescription>
+                Created {new Date(image.createdAt).toLocaleDateString()}
+              </DialogDescription>
+            </DialogHeader>
 
-          <div className="border-t pt-4 mt-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSettings(!showSettings)}
-              className="w-full justify-between"
-            >
-              <span className="flex items-center gap-2">
-                <Settings className="w-4 h-4" />
-                Share Settings
-              </span>
-              {showSettings ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </Button>
-
-            {showSettings && (
-              <div className="mt-4 space-y-4">
-                <div className="flex items-center justify-between">
-                  <label htmlFor="sharing-toggle" className="text-sm font-medium">
-                    Enable Sharing
-                  </label>
-                  <Switch
-                    id="sharing-toggle"
-                    checked={sharingEnabled}
-                    onCheckedChange={handleSharingToggle}
-                  />
-                </div>
-
-                {sharingEnabled && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Link Expiration</label>
-                    <Select
-                      onValueChange={handleExpirationChange}
-                      defaultValue={getExpirationValue()}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="24">24 hours</SelectItem>
-                        <SelectItem value="168">7 days</SelectItem>
-                        <SelectItem value="720">30 days</SelectItem>
-                        <SelectItem value="never">Never expire</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                {!sharingEnabled && (
-                  <p className="text-sm text-muted-foreground">
-                    When sharing is disabled, your image link will not be accessible to others.
-                  </p>
-                )}
-
-                {/* Feature in public gallery */}
-                <div className="flex items-center justify-between pt-2">
-                  <div className="space-y-1 text-left">
-                    <label className="text-sm font-medium">Feature in Public Gallery</label>
-                    <p className="text-xs text-muted-foreground">
-                      Showcase your transformation to inspire others
-                    </p>
-                  </div>
-                  <Switch
-                    checked={isFeatured}
-                    onCheckedChange={handleFeaturedToggle}
-                    disabled={isAdminLocked}
-                  />
-                </div>
-                {isAdminLocked && (
-                  <p className="text-xs text-destructive/80">
-                    {adminLockMessage}
-                  </p>
+            <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button onClick={handleShare} className="flex items-center gap-2">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied ? "Copied!" : "Copy Share Link"}
+                </Button>
+                <Button
+                  onClick={handleTwitterShare}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
+                  <X className="h-4 w-4" />
+                  Share on X
+                </Button>
+                {typeof navigator !== "undefined" && "share" in navigator && (
+                  <Button
+                    onClick={handleNativeShare}
+                    variant="outline"
+                    className="flex items-center gap-2"
+                  >
+                    <Share2 className="h-4 w-4" />
+                    Share
+                  </Button>
                 )}
               </div>
-            )}
+
+              <div className="mt-6 border-t pt-4">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowSettings(!showSettings)}
+                  className="w-full justify-between"
+                >
+                  <span className="flex items-center gap-2">
+                    <Settings className="h-4 w-4" />
+                    Share Settings
+                  </span>
+                  {showSettings ? (
+                    <ChevronUp className="h-4 w-4" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4" />
+                  )}
+                </Button>
+
+                {showSettings && (
+                  <div className="mt-4 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="sharing-toggle" className="text-sm font-medium">
+                        Enable Sharing
+                      </label>
+                      <Switch
+                        id="sharing-toggle"
+                        checked={sharingEnabled}
+                        onCheckedChange={handleSharingToggle}
+                      />
+                    </div>
+
+                    {sharingEnabled && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium">Link Expiration</label>
+                        <Select
+                          onValueChange={handleExpirationChange}
+                          defaultValue={getExpirationValue()}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="24">24 hours</SelectItem>
+                            <SelectItem value="168">7 days</SelectItem>
+                            <SelectItem value="720">30 days</SelectItem>
+                            <SelectItem value="never">Never expire</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {!sharingEnabled && (
+                      <p className="text-sm text-muted-foreground">
+                        When sharing is disabled, your image link will not be accessible to others.
+                      </p>
+                    )}
+
+                    <div className="flex items-center justify-between pt-2">
+                      <div className="space-y-1 text-left">
+                        <label className="text-sm font-medium">Feature in Public Gallery</label>
+                        <p className="text-xs text-muted-foreground">
+                          Showcase your transformation to inspire others
+                        </p>
+                      </div>
+                      <Switch
+                        checked={isFeatured}
+                        onCheckedChange={handleFeaturedToggle}
+                        disabled={isAdminLocked}
+                      />
+                    </div>
+                    {isAdminLocked && (
+                      <p className="text-xs text-destructive/80">
+                        {adminLockMessage}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>
