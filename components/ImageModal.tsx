@@ -182,15 +182,18 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
             </DialogHeader>
 
             <div className="flex-1 overflow-y-auto px-6 pb-6 pt-4">
-              <div className="flex flex-wrap justify-center gap-2">
-                <Button onClick={handleShare} className="flex items-center gap-2">
+              <div className="grid w-full gap-2 sm:grid-cols-2">
+                <Button
+                  onClick={handleShare}
+                  className="flex w-full items-center justify-center gap-2 sm:col-span-2"
+                >
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied ? "Copied!" : "Copy Share Link"}
                 </Button>
                 <Button
                   onClick={handleTwitterShare}
                   variant="outline"
-                  className="flex items-center gap-2"
+                  className="flex w-full items-center justify-center gap-2"
                 >
                   <X className="h-4 w-4" />
                   Share on X
@@ -199,7 +202,7 @@ export default function ImageModal({ image, isOpen, onClose }: ImageModalProps) 
                   <Button
                     onClick={handleNativeShare}
                     variant="outline"
-                    className="flex items-center gap-2"
+                    className="flex w-full items-center justify-center gap-2"
                   >
                     <Share2 className="h-4 w-4" />
                     Share

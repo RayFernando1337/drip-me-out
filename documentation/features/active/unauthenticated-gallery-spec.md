@@ -816,7 +816,7 @@ const handleFeaturedToggle = async (enabled: boolean) => {
 
 - `components/ImageModal.tsx` shares the same responsive principles as the public modal: `DialogContent` stretches to `max-w-5xl` with a `flex` container so imagery and controls stay side-by-side on desktop and stack on mobile.
 - The media pane uses a `fill` image with `object-contain`, ensuring extreme landscape or portrait shots never hide the settings column.
-- The settings pane (`overflow-y-auto`) contains share buttons, toggles, and the featured controls so the moderator lock message and switches remain accessible without scrolling the whole dialog.
+- The settings pane (`overflow-y-auto`) contains share buttons, toggles, and the featured controls so the moderator lock message and switches remain accessible without scrolling the whole dialog. Sharing actions use a two-column grid on larger screens so the primary "Copy" action spans the full row with secondary options aligned beneath it.
 - Buttons retain their existing logic; only layout/styling changed, minimizing regression risk.
 
 **REUSE EXISTING**: We need to add one new mutation to `convex/images.ts` following the same pattern as `updateShareSettings`:
