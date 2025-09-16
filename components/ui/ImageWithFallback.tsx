@@ -37,9 +37,7 @@ export function ImageWithFallback({
         className={className}
         onError={(e) => {
           setFailed(true);
-          onError?.(
-            e as Parameters<NonNullable<ImageProps["onError"]>>[0]
-          );
+          onError?.(e as Parameters<NonNullable<ImageProps["onError"]>>[0]);
         }}
       />
     );
