@@ -2,7 +2,7 @@
 
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import ImageModal from "./ImageModal";
 import { Button } from "./ui/button";
 import { ImageWithFallback } from "./ui/ImageWithFallback";
@@ -30,9 +30,29 @@ export default function ImagePreview({
 }: ImagePreviewProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalImageId, setModalImageId] = useState<string | null>(null);
 
   // Use images prop if provided, otherwise fallback to uploadedImages for compatibility
   const imagesToDisplay = images.length > 0 ? images : uploadedImages;
+
+  useEffect(() => {
+    if (!isModalOpen || modalImageId === null) return;
+
+    const stillExists = imagesToDisplay.some((img) => img._id === modalImageId);
+    if (!stillExists) {
+      setIsModalOpen(false);
+      setSelectedImageIndex(null);
+      setModalImageId(null);
+    } else if (
+      selectedImageIndex !== null &&
+      imagesToDisplay[selectedImageIndex]?._id !== modalImageId
+    ) {
+      const newIndex = imagesToDisplay.findIndex((img) => img._id === modalImageId);
+      if (newIndex >= 0) {
+        setSelectedImageIndex(newIndex);
+      }
+    }
+  }, [imagesToDisplay, isModalOpen, modalImageId, selectedImageIndex]);
 
   const allImages = imagesToDisplay.map((img, index) => ({
     type: "uploaded" as const,
@@ -55,6 +75,7 @@ export default function ImagePreview({
             onClick={() => {
               setSelectedImageIndex(image.index);
               setIsModalOpen(true);
+              setModalImageId(image.data._id);
             }}
           >
             <div className="bg-card border border-border/30 hover:border-border transition-all duration-200 overflow-hidden rounded-xl shadow-sm hover:shadow-md">
@@ -111,6 +132,7 @@ export default function ImagePreview({
         onClose={() => {
           setIsModalOpen(false);
           setSelectedImageIndex(null);
+          setModalImageId(null);
         }}
         onImageIndexChange={(index) => setSelectedImageIndex(index)}
       />

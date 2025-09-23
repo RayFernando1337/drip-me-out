@@ -1,6 +1,6 @@
 # User Image Deletion – Implementation Progress Tracker
 
-**Last Updated:** September 23, 2025 (Phase 1 backend foundations completed)  
+**Last Updated:** September 23, 2025 (Phase 2 frontend controls in progress)  
 **Specification:** [User Image Deletion Technical Specification](./user-image-deletion-spec.md)
 
 ## Overview
@@ -12,7 +12,7 @@ Reintroducing ownership tooling so authenticated users can delete any of their u
 | Phase                        | Status | Completion | Notes                                                                               |
 | ---------------------------- | ------ | ---------- | ----------------------------------------------------------------------------------- |
 | Phase 1 – Backend foundation | ✅     | 100%       | Index + ownership propagation + `deleteImage` mutation + Gemini guards implemented. |
-| Phase 2 – Frontend controls  | ⏸️     | 0%         | Modal delete UX, toast/confirmation flows, share-page fallback.                     |
+| Phase 2 – Frontend controls  | 🔄     | 40%        | Modal delete UX, confirmation dialog, share-page fallback implemented.              |
 | Phase 3 – Secondary surfaces | ⏸️     | 0%         | Admin dashboard integration, telemetry decisions.                                   |
 | Phase 4 – QA & release       | ⏸️     | 0%         | Manual sweeps, typecheck/lint, documentation updates.                               |
 
@@ -23,6 +23,9 @@ Reintroducing ownership tooling so authenticated users can delete any of their u
 - [x] Kick off Phase 1 once open questions are resolved; run `bunx convex dev` during backend work.
 - [x] Add ownership propagation to generated images and schema index (done; verify tests/validation).
 - [x] Implement `deleteImage` mutation with cascaded storage cleanup.
+- [x] Add modal delete controls with confirmation.
+- [x] Provide share page fallback when image is missing.
+- [ ] Add toast/error scenarios for share page CTA (if needed).
 - [x] Short-circuit Gemini mutation paths when originals are missing.
 
 ## Next Steps

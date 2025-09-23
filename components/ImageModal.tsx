@@ -3,8 +3,10 @@
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +22,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -28,6 +31,7 @@ import {
   Copy,
   Settings,
   Share2,
+  Trash2,
   X,
 } from "lucide-react";
 import Image from "next/image";
@@ -66,6 +70,8 @@ export default function ImageModal({
     (currentImage as ImageWithFeatured | null)?.isFeatured === true &&
       (currentImage as ImageWithFeatured | null)?.isDisabledByAdmin !== true
   );
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Update state when image prop changes
   useEffect(() => {
@@ -117,6 +123,7 @@ export default function ImageModal({
   }, [isOpen, canNavigate, goToPrevious, goToNext]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
   const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
+  const deleteImageMutation = useMutation(api.images.deleteImage);
 
   if (!currentImage) return null;
 
@@ -221,6 +228,25 @@ export default function ImageModal({
     if (hoursLeft <= 168) return "168";
     if (hoursLeft <= 720) return "720";
     return "never";
+  };
+
+  const handleDelete = async () => {
+    if (!currentImage) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteImageMutation({ imageId: currentImage._id });
+      toast.success("Image deleted", {
+        description: "The image and its generated versions were removed.",
+      });
+      setIsDeleteDialogOpen(false);
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete image";
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -384,6 +410,26 @@ export default function ImageModal({
                     {isAdminLocked && (
                       <p className="text-xs text-destructive/80">{adminLockMessage}</p>
                     )}
+
+                    <div className="border-t pt-4 space-y-3">
+                      <p className="text-sm font-medium text-destructive flex items-center gap-2">
+                        <Trash2 className="h-4 w-4" />
+                        Delete image
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Deleting removes this upload and any generated versions. This action cannot
+                        be undone.
+                      </p>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => setIsDeleteDialogOpen(true)}
+                        className="flex items-center gap-2"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        Delete image
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -391,6 +437,45 @@ export default function ImageModal({
           </div>
         </div>
       </DialogContent>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete this image?
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              This will permanently remove the original upload and any generated versions from your
+              gallery and storage. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end sm:space-x-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Cancel
+              </Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Deleting...
+                </span>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" /> Delete permanently
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
