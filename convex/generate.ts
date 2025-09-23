@@ -182,7 +182,15 @@ export const generateImage = internalAction({
       // Get the URL from storage ID
       const baseImageUrl = await ctx.storage.getUrl(storageId);
       if (!baseImageUrl) {
-        throw new Error("Failed to get image URL from storage");
+        console.log(
+          `[generateImage] Storage missing for originalImageId ${originalImageId}; skipping generation.`
+        );
+        await ctx.runMutation(api.generate.updateImageStatus, {
+          imageId: originalImageId,
+          status: "failed",
+          error: "Original image no longer available",
+        });
+        return null;
       }
 
       // Load the source image and encode as base64 for inlineData
