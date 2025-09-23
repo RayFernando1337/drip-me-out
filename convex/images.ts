@@ -2,7 +2,7 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
-import { assertOwner } from "./lib/auth";
+import { assertOwner, requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
 import { PaginatedGalleryValidator } from "./lib/validators";
 
@@ -103,8 +103,7 @@ export const updateFeaturedStatus = mutation({
     if (!image) throw new Error("Image not found");
     // Backward-compat: older images may not have userId set.
     // If missing, claim ownership to the current user before proceeding.
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const identity = await requireIdentity(ctx);
     if (!image.userId) {
       await ctx.db.patch(args.imageId, { userId: identity.subject });
     } else {
@@ -142,6 +141,82 @@ export const sendImage = mutation({
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
     });
+  },
+});
+
+export const deleteImage = mutation({
+  args: {
+    imageId: v.id("images"),
+    includeGenerated: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    deletedTotal: v.number(),
+    deletedGenerated: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) {
+      return { deletedTotal: 0, deletedGenerated: 0 };
+    }
+
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    if (!image.userId) {
+      await ctx.db.patch(args.imageId, { userId: identity.subject });
+    } else {
+      await assertOwner(ctx, image.userId);
+    }
+
+    const includeGenerated = args.includeGenerated ?? true;
+    const docsToDelete: Array<typeof image> = [image];
+
+    if (includeGenerated && image.isGenerated !== true) {
+      const generatedDocs = await ctx.db
+        .query("images")
+        .withIndex("by_originalImageId", (q) => q.eq("originalImageId", args.imageId))
+        .collect();
+      docsToDelete.push(...generatedDocs);
+    }
+
+    const seenIds = new Set<string>();
+    const uniqueDocs: Array<typeof image> = [];
+    for (const doc of docsToDelete) {
+      if (seenIds.has(doc._id)) continue;
+      seenIds.add(doc._id);
+      uniqueDocs.push(doc);
+    }
+
+    let deletedGenerated = 0;
+
+    for (const doc of uniqueDocs) {
+      if (doc._id !== image._id && doc.isGenerated === true) {
+        deletedGenerated += 1;
+      }
+
+      try {
+        await ctx.storage.delete(doc.body);
+      } catch (error) {
+        console.warn("[deleteImage] Failed to delete storage blob", {
+          imageId: doc._id,
+          storageId: doc.body,
+          error,
+        });
+      }
+
+      try {
+        await ctx.db.delete(doc._id);
+      } catch (error) {
+        console.warn("[deleteImage] Failed to delete image document", {
+          imageId: doc._id,
+          error,
+        });
+      }
+    }
+
+    return {
+      deletedTotal: uniqueDocs.length,
+      deletedGenerated,
+    };
   },
 });
 

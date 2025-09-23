@@ -30,6 +30,7 @@ export default defineSchema({
     disabledByAdminReason: v.optional(v.string()),
   })
     .index("by_is_generated", ["isGenerated"])
+    .index("by_originalImageId", ["originalImageId"])
     .index("by_generation_status", ["generationStatus"])
     .index("by_is_generated_and_status", ["isGenerated", "generationStatus"]) // Compound index for filtering
     .index("by_sharing_enabled", ["sharingEnabled"]) // link sharing controls

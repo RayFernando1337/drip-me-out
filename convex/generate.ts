@@ -50,6 +50,11 @@ export const updateImageStatus = mutation({
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
+    const existing = await ctx.db.get(imageId);
+    if (!existing) {
+      return null;
+    }
+
     const updateData: {
       generationStatus: "pending" | "processing" | "completed" | "failed";
       generationError?: string;
@@ -71,14 +76,30 @@ export const saveGeneratedImage = mutation({
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
   },
+  returns: v.union(v.id("images"), v.null()),
   handler: async (ctx, args) => {
     const { storageId, originalImageId } = args;
+    const originalImage = await ctx.db.get(originalImageId);
+    if (!originalImage) {
+      try {
+        await ctx.storage.delete(storageId);
+      } catch (error) {
+        console.warn("[saveGeneratedImage] Failed to delete orphaned storage", {
+          storageId,
+          error,
+        });
+      }
+      return null;
+    }
 
     const generatedImageId = await ctx.db.insert("images", {
       body: storageId,
       createdAt: Date.now(),
       isGenerated: true,
       originalImageId: originalImageId,
+      userId: originalImage.userId,
+      sharingEnabled: originalImage.sharingEnabled,
+      shareExpiresAt: originalImage.shareExpiresAt,
     });
     return generatedImageId;
   },
