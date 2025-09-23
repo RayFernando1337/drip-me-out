@@ -1,8 +1,10 @@
 import type { Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
+
+type StorageReader = { storage: Pick<QueryCtx["storage"], "getUrl"> };
 
 export async function mapImagesToUrls<T extends { body: Id<"_storage"> }>(
-  ctx: Pick<QueryCtx, "storage"> | Pick<MutationCtx, "storage"> | Pick<ActionCtx, "storage">,
+  ctx: StorageReader,
   docs: Array<T>
 ) {
   const urls = await Promise.all(docs.map((d) => ctx.storage.getUrl(d.body)));
