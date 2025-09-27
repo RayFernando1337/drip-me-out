@@ -52,6 +52,7 @@ interface ImageModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImageIndexChange?: (index: number) => void;
+  onDeleted?: (imageId: Id<"images">) => void;
 }
 
 export default function ImageModal({
@@ -60,6 +61,7 @@ export default function ImageModal({
   isOpen,
   onClose,
   onImageIndexChange,
+  onDeleted,
 }: ImageModalProps) {
   const currentImage = selectedImageIndex !== null ? images[selectedImageIndex] : null;
 
@@ -239,6 +241,8 @@ export default function ImageModal({
       toast.success("Image deleted", {
         description: "The image and its generated versions were removed.",
       });
+      // Inform parent so it can update local state without resetting pagination/scroll
+      onDeleted?.(currentImage._id as Id<"images">);
       setIsDeleteDialogOpen(false);
       onClose();
     } catch (error) {
@@ -411,24 +415,26 @@ export default function ImageModal({
                       <p className="text-xs text-destructive/80">{adminLockMessage}</p>
                     )}
 
-                    <div className="border-t pt-4 space-y-3">
-                      <p className="text-sm font-medium text-destructive flex items-center gap-2">
-                        <Trash2 className="h-4 w-4" />
-                        Delete image
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Deleting removes this upload and any generated versions. This action cannot
-                        be undone.
-                      </p>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setIsDeleteDialogOpen(true)}
-                        className="flex items-center gap-2"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                        Delete image
-                      </Button>
+                    <div className="border-t pt-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
+                            <p className="text-xs text-muted-foreground">
+                              Permanently delete this image and all versions
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setIsDeleteDialogOpen(true)}
+                          className="w-full flex items-center gap-2"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Image
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -443,17 +449,16 @@ export default function ImageModal({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="h-5 w-5" />
-              Delete this image?
+              Delete Image?
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              This will permanently remove the original upload and any generated versions from your
-              gallery and storage. This action cannot be undone.
+              This will permanently remove this image and all generated versions. This cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-end sm:space-x-2">
             <DialogClose asChild>
               <Button variant="outline" disabled={isDeleting}>
-                Cancel
+                Keep Image
               </Button>
             </DialogClose>
             <Button
@@ -469,7 +474,7 @@ export default function ImageModal({
                 </span>
               ) : (
                 <>
-                  <Trash2 className="h-4 w-4" /> Delete permanently
+                  <Trash2 className="h-4 w-4" /> Delete Image
                 </>
               )}
             </Button>

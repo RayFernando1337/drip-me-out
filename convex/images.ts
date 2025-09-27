@@ -152,19 +152,27 @@ export const deleteImage = mutation({
   returns: v.object({
     deletedTotal: v.number(),
     deletedGenerated: v.number(),
+    actedAsAdmin: v.boolean(),
   }),
   handler: async (ctx, args) => {
     const image = await ctx.db.get(args.imageId);
     if (!image) {
-      return { deletedTotal: 0, deletedGenerated: 0 };
+      return { deletedTotal: 0, deletedGenerated: 0, actedAsAdmin: false };
     }
 
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-    if (!image.userId) {
-      await ctx.db.patch(args.imageId, { userId: identity.subject });
-    } else {
-      await assertOwner(ctx, image.userId);
+    const identity = await requireIdentity(ctx);
+    const adminRecord = await ctx.db
+      .query("admins")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .unique();
+    const actedAsAdmin = !!adminRecord;
+
+    if (!actedAsAdmin) {
+      if (!image.userId) {
+        await ctx.db.patch(args.imageId, { userId: identity.subject });
+      } else if (image.userId !== identity.subject) {
+        throw new Error("Not authorized to modify this image");
+      }
     }
 
     const includeGenerated = args.includeGenerated ?? true;
@@ -216,6 +224,7 @@ export const deleteImage = mutation({
     return {
       deletedTotal: uniqueDocs.length,
       deletedGenerated,
+      actedAsAdmin,
     };
   },
 });
@@ -423,9 +432,14 @@ export const getGalleryImagesPaginated = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    // STRATEGY: Use the default order (by _creationTime desc) and leverage Post-Processing
-    // This is faster than complex index combinations for mixed queries
-    const result = await ctx.db.query("images").order("desc").paginate(args.paginationOpts);
+    // STRATEGY: Fetch more records to account for filtering, ensuring we get enough results
+    // Increase fetch size to compensate for filtering out failed originals
+    const adjustedPaginationOpts = {
+      ...args.paginationOpts,
+      numItems: Math.ceil(args.paginationOpts.numItems * 1.5), // Fetch 50% more to account for filtering
+    };
+    
+    const result = await ctx.db.query("images").order("desc").paginate(adjustedPaginationOpts);
 
     // Efficiently filter for gallery items (avoid expensive operations)
     const galleryImages: typeof result.page = [];
@@ -445,8 +459,11 @@ export const getGalleryImagesPaginated = query({
       // Skip failed originals (they go to failed tab)
     }
 
+    // Trim to requested amount if we got too many
+    const trimmedGalleryImages = galleryImages.slice(0, args.paginationOpts.numItems);
+
     // OPTIMIZATION: Batch URL generation for filtered gallery images
-    if (galleryImages.length === 0) {
+    if (trimmedGalleryImages.length === 0) {
       return {
         page: [],
         isDone: result.isDone,
@@ -454,11 +471,11 @@ export const getGalleryImagesPaginated = query({
       };
     }
 
-    const storageIds = galleryImages.map((img) => img.body);
+    const storageIds = trimmedGalleryImages.map((img) => img.body);
     const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
 
     // Map URLs back to images efficiently
-    const imagesWithUrls = galleryImages.map((image, index) => ({
+    const imagesWithUrls = trimmedGalleryImages.map((image, index) => ({
       ...image,
       url: urls[index],
     }));
@@ -468,9 +485,13 @@ export const getGalleryImagesPaginated = query({
       (image): image is typeof image & { url: string } => image.url !== null
     );
 
+    // Adjust pagination logic for trimmed results
+    // We're only truly "done" if the underlying query is done AND we got fewer results than requested
+    const actuallyDone = result.isDone && validImages.length < args.paginationOpts.numItems;
+
     return {
       page: validImages,
-      isDone: result.isDone,
+      isDone: actuallyDone,
       continueCursor: result.continueCursor,
     };
   },

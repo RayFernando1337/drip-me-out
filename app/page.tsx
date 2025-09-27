@@ -79,11 +79,11 @@ function Content() {
   const [showDesktopCamera, setShowDesktopCamera] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
 
-  // Pagination state - Load 16 images at a time (divisible by 4-column grid)
+  // Pagination state - base page size; adjusted dynamically to keep 4-column rows filled
   const [paginationOpts, setPaginationOpts] = useState<{
     numItems: number;
     cursor: string | null;
-  }>({ numItems: 16, cursor: null });
+  }>({ numItems: 12, cursor: null });
   // Type for gallery images - infer from the paginated query
   type GalleryImageType = NonNullable<
     ReturnType<typeof useQuery<typeof api.images.getGalleryImagesPaginated>>
@@ -100,20 +100,26 @@ function Content() {
   // Handle pagination results with proper reactivity
   useEffect(() => {
     if (galleryResult?.page) {
-      if (paginationOpts.cursor === null) {
-        // First page - replace all images (handles new generations)
-        setAllGalleryImages(galleryResult.page);
-      } else {
-        // Additional pages - append to existing images
-        setAllGalleryImages((prev) => {
-          // Avoid duplicates by checking IDs
+      setAllGalleryImages((prev) => {
+        if (paginationOpts.cursor === null) {
+          // First page - replace all images (handles new generations AND deletions)
+          return galleryResult.page;
+        } else {
+          // Additional pages - append to existing images, avoiding duplicates
           const existingIds = new Set(prev.map((img) => img._id));
           const newImages = galleryResult.page.filter((img) => !existingIds.has(img._id));
           return [...prev, ...newImages];
-        });
-      }
+        }
+      });
     }
   }, [galleryResult, paginationOpts.cursor]);
+
+  // Track total count to detect external additions (no hard reset on decreases)
+  const prevTotalCount = useRef(totalImagesCount);
+  useEffect(() => {
+    // If total count increases and we're on first page, Convex reactivity will refresh
+    prevTotalCount.current = totalImagesCount;
+  }, [totalImagesCount]);
 
   // Auto-refresh when new images complete (reactive to total count changes)
   useEffect(() => {
@@ -126,21 +132,61 @@ function Content() {
   // Load more function
   const loadMoreImages = useCallback(() => {
     if (galleryResult?.continueCursor && !galleryResult.isDone) {
+      const currentCount = allGalleryImages.length;
+      const remainder = currentCount % 4;
+      const fill = remainder === 0 ? 0 : 4 - remainder;
+      const base = 12;
+      const numItems = base + fill; // ensure new total ends as multiple of 4
       setPaginationOpts({
-        numItems: 16,
+        numItems,
         cursor: galleryResult.continueCursor,
       });
     }
-  }, [galleryResult]);
+  }, [galleryResult, allGalleryImages.length]);
 
   // Reset pagination when new images are uploaded
   const resetPagination = useCallback(() => {
-    setPaginationOpts({ numItems: 16, cursor: null });
+    setPaginationOpts({ numItems: 12, cursor: null });
     setAllGalleryImages([]);
   }, []);
 
+  // Handle local deletion to avoid full reset and preserve scroll position
+  const handleDeleted = useCallback(
+    (imageId: Id<"images">) => {
+      setAllGalleryImages((prev) => prev.filter((img) => img._id !== imageId));
+
+      // Top-off to keep rows filled if more items are available
+      if (galleryResult?.continueCursor && !galleryResult.isDone) {
+        const nextCount = allGalleryImages.length - 1;
+        const remainder = ((nextCount % 4) + 4) % 4;
+        const fill = remainder === 0 ? 0 : 4 - remainder;
+        if (fill > 0) {
+          setPaginationOpts({ numItems: fill, cursor: galleryResult.continueCursor });
+        }
+      }
+    },
+    [galleryResult, allGalleryImages.length]
+  );
+
   // Memoize gallery images for stable references
   const galleryImages = useMemo(() => allGalleryImages || [], [allGalleryImages]);
+
+  // Auto-top-off after merges if last row is incomplete and more items exist
+  const lastAutoFillCursorRef = useRef<string | null>(null);
+  useEffect(() => {
+    const remainder = allGalleryImages.length % 4;
+    const canContinue = !!galleryResult?.continueCursor && !galleryResult.isDone;
+    if (remainder > 0 && canContinue) {
+      const cursor = galleryResult!.continueCursor as string;
+      if (lastAutoFillCursorRef.current !== cursor) {
+        lastAutoFillCursorRef.current = cursor;
+        const fill = 4 - remainder;
+        setPaginationOpts({ numItems: fill, cursor });
+      }
+    } else if (remainder === 0) {
+      lastAutoFillCursorRef.current = null;
+    }
+  }, [allGalleryImages.length, galleryResult]);
 
   // Map low-level errors to friendly, user-facing messages
   const toUserMessage = useCallback((error: unknown): string => {
@@ -579,6 +625,7 @@ function Content() {
                 onLoadMore={loadMoreImages}
                 hasMore={!galleryResult?.isDone && !!galleryResult?.continueCursor}
                 isLoading={galleryResult === undefined}
+                onDeleted={handleDeleted}
               />
             </div>
           )}

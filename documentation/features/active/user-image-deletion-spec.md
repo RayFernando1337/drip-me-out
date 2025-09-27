@@ -7,7 +7,7 @@
 
 ## Executive Summary
 
-Give authenticated users full control over their uploads by allowing them to permanently delete originals and generated derivatives while also removing their Convex storage blobs. The shipped implementation cascades through related records, keeps share/public experiences in sync, and hardens the Convex actions so lingering generation work exits cleanly when source data disappears. Admin tooling remains out of scope for the current phase.
+Give authenticated users full control over their uploads by allowing them to permanently delete originals and generated derivatives while also removing their Convex storage blobs. The shipped implementation cascades through related records, keeps share/public experiences in sync, and hardens the Convex actions so lingering generation work exits cleanly when source data disappears. Phase 3 extends the admin moderation dashboard with the same destructive controls so staff can remove offensive content immediately.
 
 ## Problem Statement
 
@@ -51,13 +51,13 @@ Give authenticated users full control over their uploads by allowing them to per
   - `imageId: Id<"images">` — target image (original or derivative)
   - `includeGenerated?: boolean` — default `true`; when true and the target is an original, cascades to its derivatives
 - Returns:
-  - `{ deletedTotal: number; deletedGenerated: number }`
+  - `{ deletedTotal: number; deletedGenerated: number; actedAsAdmin: boolean }`
 - Behavior:
-  - Auth: requires a signed-in user. The mutation asserts ownership via `assertOwner`; older documents missing `userId` are first patched to the caller before the check.
-  - Admin override: not implemented. Moderation tooling must call this mutation as the owner or wait for Phase 3.
+  - Auth: requires a signed-in user. The mutation patches legacy documents without `userId` to the caller before continuing.
+  - Admin override: enabled. Admins (determined by membership in the `admins` table) can delete any image without taking ownership; the response sets `actedAsAdmin: true` for telemetry and UI copy.
   - When `includeGenerated` is true (default) and the target is an original, gather derivatives via the `by_originalImageId` index and deduplicate any repeated references.
   - Deletes each Convex storage blob inside a `try/catch` (warnings logged, deletion continues) before removing the corresponding document.
-  - Returns `{0,0}` when the target no longer exists and reports the number of generated images removed via `deletedGenerated`.
+  - Returns `{0,0,false}` when the target no longer exists and reports the number of generated images removed via `deletedGenerated`.
 
 ### Action Pipeline Resilience
 
@@ -86,6 +86,7 @@ Give authenticated users full control over their uploads by allowing them to per
 - The backend supports deleting generated derivatives directly (UI still funnels through the original for now) and accurately reports `deletedGenerated`.
 - Deleting during `pending`/`processing` removes the document and storage; any background status updates quietly no-op, leaving no residual activity or blobs.
 - `deleteImage` returns accurate counts; the UI surfaces "Image deleted" success copy with derivative counts in the toast description.
+- Admin moderation dashboard triggers the same mutation, receives `actedAsAdmin: true`, and shows that the user instantly loses access.
 - Share routes fall back to the "This image is no longer available" empty state immediately after deletion.
 - No orphaned `_storage` blobs remain for deleted docs (warnings logged if storage delete fails, but mutation proceeds).
 - Errors are owner-safe: unauthenticated → Error("Not authenticated"); unauthorized → Error("Not authorized to modify this image"); internal errors surface a generic failure toast.
@@ -94,7 +95,7 @@ Give authenticated users full control over their uploads by allowing them to per
 ## Error Handling & UX Mapping
 
 - Not authenticated → HTTP 200 with thrown Error("Not authenticated") from Convex; UI shows sign-in CTA.
-- Not owner → Error("Not authorized to modify this image"); UI shows a non-technical toast. Legacy images without `userId` are first patched to the caller before this check.
+- Not owner → Error("Not authorized to modify this image"); UI shows a non-technical toast. Legacy images without `userId` are first patched to the caller before this check. Admin callers bypass this branch entirely.
 - Already deleted/missing → mutation resolves with `{0,0}`; UI shows "Already deleted." toast at info level.
 - Storage delete failures are logged server-side and do not block document deletion.
 
@@ -106,10 +107,10 @@ Give authenticated users full control over their uploads by allowing them to per
 
 ## Decisions & Open Questions
 
-- Admin override scope: DEFERRED. Current mutation only allows owners; future moderation surfaces must either impersonate or add an explicit override.
+- Admin override scope: ENABLED via direct membership lookup in the `admins` table; moderation surfaces can remove any image without ownership reassignment.
 - In-progress deletions: When a delete occurs during `pending`/`processing`, the backend removes the document and blobs immediately. Any later scheduler callbacks short-circuit because `ctx.db.get` returns `null`.
 - Derivative-only delete: Backend supports it; UI affordance OUT OF SCOPE for Phase 2. Revisit with product.
-- Telemetry: Optional. If added, emit `image.delete` with `{ deletedTotal, deletedGenerated }` plus actor metadata when moderation support arrives.
+- Telemetry: Optional. If added, emit `image.delete` with `{ deletedTotal, deletedGenerated, actedAsAdmin }` plus actor metadata when moderation support arrives.
 
 ## Rollout & QA Plan
 
@@ -152,9 +153,9 @@ Give authenticated users full control over their uploads by allowing them to per
 
 ### Phase 3 – Secondary Surfaces & Admin Options
 
-- Decide whether admins can trigger the same mutation (e.g., from `AdminModerationDashboard`).
-- Confirm featured gallery queries handle missing documents seamlessly.
-- Consider lightweight logging/metrics for deletion events (optional).
+- Wire `AdminModerationDashboard` to call `images.deleteImage` with admin privileges and surface confirmation/toast UX.
+- Ensure reactive admin queries remove deleted records immediately (no manual refetch required).
+- Track optional telemetry requirement; emit structured events only if product approves.
 
 ### Phase 4 – QA, Docs, and Release
 
@@ -178,7 +179,7 @@ Give authenticated users full control over their uploads by allowing them to per
 
 ## Security Considerations
 
-- Ensure only the owner can delete images in the current release; future admin tooling must introduce explicit overrides.
+- Ensure only the owner or verified admins can delete images; admin access is gated by the `admins` table lookup.
 - Avoid leaking sensitive data in error messages—convert internal errors to user-safe toasts.
 - Double-check that share links become unusable immediately after deletion (query returns `null`).
 - Treat deletion as irreversible; confirm no residual references remain in other tables before shipping.

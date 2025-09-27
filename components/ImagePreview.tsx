@@ -1,6 +1,7 @@
 "use client";
 
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import ImageModal from "./ImageModal";
@@ -19,6 +20,7 @@ interface ImagePreviewProps {
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoading?: boolean;
+  onDeleted?: (imageId: Id<"images">) => void;
 }
 
 export default function ImagePreview({
@@ -27,6 +29,7 @@ export default function ImagePreview({
   onLoadMore,
   hasMore = false,
   isLoading = false,
+  onDeleted,
 }: ImagePreviewProps) {
   const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -135,6 +138,7 @@ export default function ImagePreview({
           setModalImageId(null);
         }}
         onImageIndexChange={(index) => setSelectedImageIndex(index)}
+        onDeleted={onDeleted}
       />
     </div>
   );
