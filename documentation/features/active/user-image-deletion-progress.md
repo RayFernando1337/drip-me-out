@@ -1,6 +1,6 @@
 # User Image Deletion – Implementation Progress Tracker
 
-**Last Updated:** September 23, 2025 (Phase 2 frontend controls validated; share CTA polish pending)  
+**Last Updated:** September 27, 2025 (Admin override + in-progress deletion behavior finalized; share CTA polish pending)  
 **Specification:** [User Image Deletion Technical Specification](./user-image-deletion-spec.md)
 
 ## Overview
@@ -11,15 +11,15 @@ Reintroducing ownership tooling so authenticated users can delete any of their u
 
 | Phase                        | Status | Completion | Notes                                                                                            |
 | ---------------------------- | ------ | ---------- | ------------------------------------------------------------------------------------------------ |
-| Phase 1 – Backend foundation | ✅     | 100%       | Index + ownership propagation + `deleteImage` mutation + Gemini guards implemented.              |
+| Phase 1 – Backend foundation | ✅     | 100%       | Index + ownership propagation + `deleteImage` mutation + Gemini guards implemented (admin override live). |
 | Phase 2 – Frontend controls  | 🔄     | 70%        | Modal delete UX, confirmation dialog, share-page fallback implemented; share CTA polish pending. |
 | Phase 3 – Secondary surfaces | ⏸️     | 0%         | Admin dashboard integration, telemetry decisions.                                                |
 | Phase 4 – QA & release       | ⏸️     | 0%         | Manual sweeps, typecheck/lint, documentation updates.                                            |
 
 ## Current Tasks
 
-- [ ] Align on admin override scope (is admin delete in Phase 1 or Phase 3?).
-- [ ] Confirm expectations for deleting in-progress generations (immediate cancel vs. background no-op).
+- [x] Align on admin override scope (is admin delete in Phase 1 or Phase 3?).
+- [x] Confirm expectations for deleting in-progress generations (immediate cancel vs. background no-op).
 - [x] Kick off Phase 1 once open questions are resolved; run `bunx convex dev` during backend work.
 - [x] Add ownership propagation to generated images and schema index (done; verify tests/validation).
 - [x] Implement `deleteImage` mutation with cascaded storage cleanup.
@@ -31,7 +31,6 @@ Reintroducing ownership tooling so authenticated users can delete any of their u
 
 ## Next Steps
 
-- Resolve outstanding decisions (admin override scope, behavior for in-progress deletions).
 - Ship remaining Phase 2 polish (share CTA toast/error handling) and verify reactive gallery updates during delete flows.
 - Prepare Phase 3 kickoff plan once Phase 2 closes (admin dashboard wiring, telemetry agreement).
 

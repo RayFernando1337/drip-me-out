@@ -31,6 +31,107 @@ Give authenticated users full control over their uploaded content by allowing th
 - **Frontend**: Surface a delete control in `ImageModal` with confirmation UX and rely on existing reactive queries for UI updates.
 - **Docs & QA**: Track progress via paired spec/progress files and align with existing outstanding modal accessibility sweeps.
 
+## Detailed Design
+
+### Data Model & Indexes
+
+- Table: `images`
+  - Ownership: `userId` (Clerk subject) is propagated to all generated derivatives.
+  - Generation fields: `generationStatus` (`pending` | `processing` | `completed` | `failed`), `generationError`, `generationAttempts`.
+  - Sharing fields: `sharingEnabled` (default true for b/c), `shareExpiresAt`.
+  - Public gallery/admin: `isFeatured`, `featuredAt`, `isDisabledByAdmin`, `disabledByAdminReason`.
+- Indexes (relevant):
+  - `by_originalImageId` — used to gather derivatives for cascade deletion.
+  - `by_is_generated`, `by_generation_status`, `by_is_generated_and_status` — existing gallery flows unaffected by deletes.
+
+### Mutation Contract: deleteImage
+
+- Name: `images.deleteImage`
+- Args:
+  - `imageId: Id<"images">` — target image (original or derivative)
+  - `includeGenerated?: boolean` — default `true`; when true and the target is an original, cascades to its derivatives
+- Returns:
+  - `{ deletedTotal: number; deletedGenerated: number }`
+- Behavior:
+  - Auth: requires signed-in user. Owners can delete their own images. Admins (verified via `assertAdmin`) may delete any image without ownership checks.
+  - Legacy ownership gap: if the document lacks `userId` and caller is not an admin, claim ownership by the current user before proceeding.
+  - Gathers derivatives via `by_originalImageId` when applicable.
+  - Deletes Convex storage blobs first, then removes documents.
+  - Idempotent-ish: returns `{0,0}` if the `imageId` no longer exists.
+
+### Action Pipeline Resilience
+
+- `generate.saveGeneratedImage` no-ops and deletes orphaned storage if the original is gone.
+- `generate.updateImageStatus` silently returns if original is missing.
+- `generate.generateImage` marks original `failed` when storage is missing or errors occur; auto-retries once where appropriate.
+- Net effect: deleting during `processing` yields a final state of `failed` with user-facing messaging about cancellation, and no orphaned blobs/docs.
+
+### Frontend UX
+
+- Location: `ImageModal`
+  - Destructive button: "Delete image"
+  - Confirmation dialog:
+    - Title: "Delete image?"
+    - Body (original, owner view): "Deleting will cancel any in-progress generation and remove the original plus all generated versions. This cannot be undone."
+    - Body (original, admin view): "Deleting will remove this photo and every generated version for the user. This cannot be undone."
+    - Body (derivative-only, if enabled later): "Deleting will remove this generated image. The original stays available."
+    - Admin affordance: when triggered by an admin (no ownership), include subtext "The user will lose access immediately." below the body copy.
+    - Actions: primary destructive "Delete", secondary "Cancel"
+  - States: disable primary button while request in-flight; close modal on success; toast on success/failure.
+- Share page
+  - If the image is deleted or sharing disabled/expired, render friendly empty state: "This image is no longer available."
+- Accessibility
+  - Focus trap in dialog; Escape to dismiss; confirm button has `aria-disabled` when pending.
+
+## Acceptance Criteria (DoD)
+
+- Owners can delete an original; all its derivatives and storage blobs are removed. Gallery and share links reflect deletion without refresh.
+- Owners can delete a generated derivative if a UI affordance exists (not required for Phase 2); backend supports it safely.
+- Deleting during `pending`/`processing` cancels the job: original transitions to `failed` with `generationError` of "Canceled by user", and no residual activity remains.
+- `deleteImage` returns accurate counts; UI surfaces a success toast like: "Image deleted. Removed 1 original and N generated versions." Admin delete toasts add trailing copy: "The user can no longer access this photo."
+- Share routes return "not found" or the empty state immediately after deletion.
+- No orphaned `_storage` blobs remain for deleted docs.
+- Errors are owner-safe: unauthenticated → prompt to sign in; unauthorized → generic "You can only delete your own images."; internal errors → generic "Something went wrong".
+- Modal and buttons meet a11y basics (keyboard, focus order, contrast).
+
+## Error Handling & UX Mapping
+
+- Not authenticated → HTTP 200 with thrown Error("Not authenticated") from Convex; UI shows sign-in CTA.
+- Not owner → Error("Not authorized to modify this image"); UI shows non-technical message. Admins never receive this error.
+- Already deleted/missing → mutation resolves with `{0,0}`; UI shows "Already deleted." toast at info level.
+- Storage delete failures are logged server-side and do not block document deletion.
+
+## Performance & Limits
+
+- Cascades use `by_originalImageId` index; no table scans.
+- Typical fan-out small (handful of derivatives); looped deletes are acceptable. If fan-out grows, consider batch delete helpers.
+- No additional rate limits beyond existing auth; UI should avoid duplicate submissions via pending state.
+
+## Decisions & Open Questions
+
+- Admin override scope: ENABLED in Phase 1 via `assertAdmin`. Admin delete follows same cascade but bypasses ownership checks.
+- In-progress deletions: When a delete occurs during `pending`/`processing`, the backend immediately marks the original `failed` with `generationError = "Canceled by user"` and ensures the Gemini action returns early if encountered. Users see messaging that the job was canceled mid-generation.
+- Derivative-only delete: Backend supports it; UI affordance OUT OF SCOPE for Phase 2. Revisit with product.
+- Telemetry: Optional. If added, emit `image.delete` with `{ deletedTotal, deletedGenerated }` (owner/admin, timestamp).
+
+## Rollout & QA Plan
+
+- Keep `bunx convex dev` open; fix all reported errors.
+- Pre-ship checks: `bun run build`, `bun run lint`.
+- Manual QA matrix:
+  - Originals in each status: `pending`, `processing`, `completed`, `failed`.
+  - Share page before/after deletion; ensure null response yields empty state.
+  - Public gallery and featured flows continue working with missing docs.
+  - Admin moderation views remain stable with deleted/missing docs.
+  - Accessibility sweep on modal and toast timings.
+
+## Out of Scope (Now)
+
+- Soft delete/undo. All deletes are permanent.
+- Bulk multi-select deletion.
+- Telemetry dashboards; only basic logging is considered.
+
+
 ## Implementation Phases
 
 ### Phase 1 – Backend Foundation
@@ -38,7 +139,7 @@ Give authenticated users full control over their uploaded content by allowing th
 - Add `.index("by_originalImageId", ["originalImageId"])` to `images`.
 - Ensure generated records copy `userId` (and relevant sharing defaults) from their originals.
 - Implement `deleteImage` mutation that:
-  - Uses `assertOwner` for originals; supports admin override path if needed later.
+  - Uses `assertOwner` for originals but allows admin override via `assertAdmin` (bypassing ownership checks).
   - Collects generated derivatives via the new index.
   - Deletes storage blobs (`ctx.storage.delete`) before removing documents.
   - Returns structured counts for telemetry.
@@ -46,7 +147,7 @@ Give authenticated users full control over their uploaded content by allowing th
 
 ### Phase 2 – Frontend Controls
 
-- Add a destructive “Delete image” button to `ImageModal` with confirmation dialog.
+- Add a destructive “Delete image” button to `ImageModal` with confirmation dialog copy above.
 - Disable the action while uploads are in-flight if necessary; otherwise rely on backend safeguards.
 - Close the modal and show toast feedback on success; display backend error messages on failure.
 - Double-check gallery accumulators (`ImagePreview`, `PublicGallery`) remove deleted items without manual refresh.
