@@ -10,6 +10,7 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { Camera, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import BuyCreditsButton from "@/components/BuyCreditsButton";
 
 export default function Home() {
   return (
@@ -389,6 +390,7 @@ function Content() {
         </div>
 
         <div className="flex items-center gap-4">
+          <BuyCreditsButton />
           {/* Desktop Webcam Toggle */}
           <div className="hidden md:flex items-center">
             <Button

@@ -36,6 +36,9 @@ export default defineSchema({
     .index("by_sharing_enabled", ["sharingEnabled"]) // link sharing controls
     // New indexes for public featured gallery
     .index("by_userId", ["userId"]) // find by owner
+    // User-scoped indexes for efficient queries
+    .index("by_userId_and_createdAt", ["userId", "createdAt"]) // per-user feed ordering
+    .index("by_userId_and_generationStatus", ["userId", "generationStatus"]) // fast status checks per user
     .index("by_isFeatured", ["isFeatured"]) // basic featured flag
     .index("by_isFeatured_and_featuredAt", ["isFeatured", "featuredAt"]) // sort by featured date
     .index("by_isFeatured_and_isDisabledByAdmin_and_featuredAt", [
@@ -47,4 +50,41 @@ export default defineSchema({
     userId: v.string(), // Clerk subject
     createdAt: v.number(),
   }).index("by_userId", ["userId"]),
+
+  // Users table to track credit balances and Polar linkage
+  users: defineTable({
+    userId: v.string(), // Clerk subject (owner)
+    credits: v.number(), // available generation credits
+    polarCustomerId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_userId", ["userId"]) // fast lookups by subject
+    .index("by_polarCustomerId", ["polarCustomerId"]),
+
+  // Payments table for idempotent order processing & audit
+  payments: defineTable({
+    orderId: v.string(), // Polar order id
+    userId: v.string(), // Clerk subject
+    amountCents: v.number(),
+    creditsGranted: v.number(),
+    status: v.union(
+      v.literal("paid"),
+      v.literal("refunded"),
+      v.literal("failed")
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_orderId", ["orderId"]) // ensure idempotency
+    .index("by_userId", ["userId"]),
+
+  // Admin-editable singleton for billing configuration
+  billingSettings: defineTable({
+    packPriceCents: v.number(), // e.g., 500
+    creditsPerPack: v.number(), // e.g., 420
+    refundOnFailure: v.boolean(), // default true
+    freeTrialCredits: v.number(), // e.g., 10
+    updatedAt: v.number(),
+    updatedBy: v.string(), // admin userId
+  }),
 });
