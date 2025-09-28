@@ -6,7 +6,11 @@ import { Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useMemo } from "react";
 
-export default function CreditBalance() {
+interface CreditBalanceProps {
+  onClick?: () => void;
+}
+
+export default function CreditBalance({ onClick }: CreditBalanceProps = {}) {
   const { isSignedIn } = useUser();
   const creditsData = useQuery(api.users.getCurrentUserCredits);
   
@@ -37,17 +41,17 @@ export default function CreditBalance() {
   return (
     <Badge 
       variant={badgeVariant}
-      className={`flex items-center gap-1.5 px-3 py-1.5 cursor-default ${
-        isZeroCredits ? 'animate-pulse' : ''
+      className={`flex items-center gap-1.5 px-3 py-1.5 ${
+        isZeroCredits ? 'cursor-pointer hover:bg-destructive/90 transition-colors' : 'cursor-default'
       }`}
       title={`You have ${credits.credits} generation credits${credits.hasFreeTrial ? ' (free trial active)' : ''}${
-        isZeroCredits ? ' - Purchase more to continue generating images' : ''
+        isZeroCredits ? ' - Click to purchase more credits' : ''
       }`}
+      onClick={isZeroCredits ? onClick : undefined}
     >
-      <Sparkles className={`h-3.5 w-3.5 ${isZeroCredits ? 'text-red-400' : ''}`} />
+      <Sparkles className={`h-3.5 w-3.5 ${isZeroCredits ? 'text-red-100' : ''}`} />
       <span className="text-sm font-medium">
         {credits.credits} credit{credits.credits !== 1 ? 's' : ''}
-        {isZeroCredits && ' - Buy More'}
       </span>
     </Badge>
   );

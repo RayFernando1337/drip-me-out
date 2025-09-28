@@ -421,12 +421,21 @@ function Content() {
         </div>
 
         <div className="flex items-center gap-4">
-          <CreditBalance />
-          <CreditPurchaseModal>
-            <Button variant="outline" size="sm">
-              Buy Credits
-            </Button>
-          </CreditPurchaseModal>
+          {/* Unified Credit UI - either clickable balance (when 0) or separate button */}
+          {userCredits?.credits === 0 ? (
+            <CreditPurchaseModal>
+              <CreditBalance />
+            </CreditPurchaseModal>
+          ) : (
+            <>
+              <CreditBalance />
+              <CreditPurchaseModal>
+                <Button variant="outline" size="sm">
+                  Buy Credits
+                </Button>
+              </CreditPurchaseModal>
+            </>
+          )}
           {/* Desktop Webcam Toggle */}
           <div className="hidden md:flex items-center">
             <Button
