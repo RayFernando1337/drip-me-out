@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 import { assertOwner, requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
 import { PaginatedGalleryValidator } from "./lib/validators";
+import { getOrCreateUser } from "./lib/users";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -23,7 +24,17 @@ export const uploadAndScheduleGeneration = mutation({
   handler: async (ctx, args) => {
     const { storageId } = args;
 
-    // Validate file metadata (size/type) before inserting
+    // Require authentication
+    const identity = await requireIdentity(ctx);
+    const userId = identity.subject;
+
+    // Get or create user and check credits
+    const user = await getOrCreateUser(ctx, userId);
+    if (user.credits < 1) {
+      throw new Error("INSUFFICIENT_CREDITS: You need at least 1 credit to generate an image. Please purchase credits to continue.");
+    }
+
+    // Validate file metadata (size/type) before consuming credits
     const meta = await ctx.db.system.get(storageId);
     if (!meta) throw new Error("VALIDATION: Missing storage metadata");
 
@@ -38,9 +49,11 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
-    // Track user identity if available (Clerk)
-    const identity = await ctx.auth.getUserIdentity();
-    const userId = identity?.subject;
+    // Atomically decrement credits BEFORE scheduling generation
+    await ctx.db.patch(user._id, {
+      credits: user.credits - 1,
+      updatedAt: Date.now(),
+    });
 
     // Create the original image record with pending status
     const originalImageId = await ctx.db.insert("images", {

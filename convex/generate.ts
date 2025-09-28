@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, mutation } from "./_generated/server";
+import { internalAction, internalQuery, mutation } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -312,6 +312,25 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
           error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
+        
+        // Attempt to refund credits for the failed generation
+        try {
+          const originalImage = await ctx.runQuery(internal.generate.getImageById, { 
+            imageId: originalImageId 
+          });
+          if (originalImage?.userId) {
+            const refundResult = await ctx.runMutation(api.users.refundCreditsForFailedGeneration, {
+              userId: originalImage.userId,
+              imageId: originalImageId,
+              reason: errorMessage,
+            });
+            if (refundResult.refunded) {
+              console.log(`[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`);
+            }
+          }
+        } catch (refundError) {
+          console.error(`[generateImage] Failed to refund credits:`, refundError);
+        }
       } catch (updateError) {
         console.error(
           `[generateImage] CRITICAL: Failed to update image status to failed:`,
@@ -346,5 +365,27 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
     }
 
     return null;
+  },
+});
+
+/**
+ * Internal query to get image by ID (for refund functionality)
+ */
+export const getImageById = internalQuery({
+  args: { imageId: v.id("images") },
+  returns: v.union(
+    v.object({
+      _id: v.id("images"),
+      userId: v.optional(v.string()),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { imageId }) => {
+    const image = await ctx.db.get(imageId);
+    if (!image) return null;
+    return {
+      _id: image._id,
+      userId: image.userId,
+    };
   },
 });

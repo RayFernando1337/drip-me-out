@@ -7,10 +7,12 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { SignInButton, UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { Camera, Upload } from "lucide-react";
+import { Camera, Upload, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import BuyCreditsButton from "@/components/BuyCreditsButton";
+import CreditBalance from "@/components/CreditBalance";
+import CreditPurchaseModal from "@/components/CreditPurchaseModal";
 
 export default function Home() {
   return (
@@ -68,6 +70,11 @@ function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
+  const userCredits = useQuery(api.users.getCurrentUserCredits);
+  
+  // Determine if user can upload (has credits)
+  const canUpload = userCredits && userCredits.credits > 0;
+  const isLoadingCredits = userCredits === undefined;
 
   const imageInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<File | null>(null);
@@ -79,6 +86,7 @@ function Content() {
   const [showMobileCamera, setShowMobileCamera] = useState(false);
   const [showDesktopCamera, setShowDesktopCamera] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
   // Pagination state - base page size; adjusted dynamically to keep 4-column rows filled
   const [paginationOpts, setPaginationOpts] = useState<{
@@ -198,6 +206,9 @@ function Content() {
     if (msg.startsWith("VALIDATION:")) {
       return msg.replace(/^VALIDATION:\s*/, "");
     }
+    if (msg.startsWith("INSUFFICIENT_CREDITS:")) {
+      return msg.replace(/^INSUFFICIENT_CREDITS:\s*/, "");
+    }
     // Fallback
     return "Something went wrong. Please try again.";
   }, []);
@@ -257,8 +268,10 @@ function Content() {
             // Schedule generation using the consolidated backend mutation
             await uploadAndScheduleGeneration({ storageId });
 
+            // Show credit usage feedback
+            const remainingCredits = (userCredits?.credits || 0) - 1;
             toast.success("Transformation started", {
-              description: "Your image is being processed",
+              description: `Using 1 credit. ${remainingCredits} credit${remainingCredits !== 1 ? 's' : ''} remaining.`,
             });
 
             // Reset pagination to show new image at top
@@ -284,15 +297,25 @@ function Content() {
       } catch (error) {
         console.error("Upload failed:", error);
         const msg = toUserMessage(error);
-        setUploadError(msg);
-        toast.error("Upload failed", { description: msg });
+        const errorMsg = error instanceof Error ? error.message : String(error || "");
+        
+        // If it's an insufficient credits error, show the purchase modal
+        if (errorMsg.startsWith("INSUFFICIENT_CREDITS:")) {
+          setShowPurchaseModal(true);
+          toast.error("No Credits Available", { 
+            description: "You need credits to generate images. Each transformation uses 1 credit." 
+          });
+        } else {
+          setUploadError(msg);
+          toast.error("Upload failed", { description: msg });
+        }
         return false; // Failed
       } finally {
         setIsPreparing(false);
         setIsUploading(false);
       }
     },
-    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage, resetPagination]
+    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage, resetPagination, userCredits?.credits]
   );
 
   const handleImageCapture = async (imageData: string) => {
@@ -390,14 +413,24 @@ function Content() {
         </div>
 
         <div className="flex items-center gap-4">
-          <BuyCreditsButton />
+          <CreditBalance />
+          <CreditPurchaseModal>
+            <Button variant="outline" size="sm">
+              Buy Credits
+            </Button>
+          </CreditPurchaseModal>
           {/* Desktop Webcam Toggle */}
           <div className="hidden md:flex items-center">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowDesktopCamera(!showDesktopCamera)}
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+              disabled={!canUpload}
+              className={`flex items-center gap-2 ${
+                !canUpload 
+                  ? "text-muted-foreground/50" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               <Camera className="w-4 h-4" />
               {showDesktopCamera ? "Hide Camera" : "Camera"}
@@ -432,18 +465,20 @@ function Content() {
               {/* Prominent Hero Drop Zone */}
               <div className="w-full max-w-4xl">
                 <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
+                  onDragOver={canUpload ? handleDragOver : undefined}
+                  onDragLeave={canUpload ? handleDragLeave : undefined}
+                  onDrop={canUpload ? handleDrop : undefined}
                   className={`
                     hero-drop-zone min-h-[280px] md:min-h-[360px] 
                     border-2 border-dashed rounded-3xl 
-                    transition-all duration-300 ease-out cursor-pointer
-                    ${!isPreparing && !isUploading ? "breathe" : ""}
+                    transition-all duration-300 ease-out
+                    ${!isPreparing && !isUploading && canUpload ? "breathe cursor-pointer" : ""}
+                    ${!canUpload ? "opacity-60 cursor-not-allowed" : ""}
                     ${
-                      isDragOver
+                      isDragOver && canUpload
                         ? "border-primary bg-gradient-to-br from-primary/10 to-purple-500/10 scale-[1.01] shadow-xl"
-                        : "border-border/40 hover:border-primary/40 hover:shadow-lg"
+                        : canUpload ? "border-border/40 hover:border-primary/40 hover:shadow-lg cursor-pointer" 
+                        : "border-border/30"
                     }
                     ${isPreparing || isUploading ? "opacity-50 cursor-not-allowed" : ""}
                   `}
@@ -460,6 +495,22 @@ function Content() {
                             {isPreparing ? "Preparing image..." : "Uploading..."}
                           </p>
                           <p className="text-sm text-muted-foreground">This may take a moment</p>
+                        </div>
+                      </div>
+                    ) : !canUpload ? (
+                      <div className="text-center space-y-6">
+                        <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
+                          <Sparkles className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                        <div className="space-y-3">
+                          <p className="text-xl md:text-2xl font-semibold text-muted-foreground">
+                            {isLoadingCredits ? "Loading..." : "No Credits Available"}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {isLoadingCredits 
+                              ? "Checking your account..." 
+                              : "You need credits to generate images. Each transformation uses 1 credit."}
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -479,6 +530,8 @@ function Content() {
                           </p>
                           <p className="text-muted-foreground">
                             or click anywhere to browse • JPEG, PNG, HEIC supported
+                            <br />
+                            <span className="text-xs">Uses 1 credit per transformation</span>
                           </p>
                         </div>
                       </div>
@@ -497,7 +550,7 @@ function Content() {
                         uploadImage(file);
                       }
                     }}
-                    disabled={isPreparing || isUploading}
+                    disabled={isPreparing || isUploading || !canUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   />
                 </div>
@@ -507,7 +560,12 @@ function Content() {
                   <button
                     type="button"
                     onClick={() => setShowMobileCamera(!showMobileCamera)}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors py-2 px-4 rounded-lg hover:bg-muted/50"
+                    disabled={!canUpload}
+                    className={`flex items-center gap-2 transition-colors py-2 px-4 rounded-lg ${
+                      !canUpload 
+                        ? "text-muted-foreground/50 cursor-not-allowed" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    }`}
                   >
                     <Camera className="w-4 h-4" />
                     <span className="text-sm font-medium">
@@ -686,6 +744,14 @@ function Content() {
           </div>
         </footer>
       )}
+
+      {/* Controlled Purchase Modal for insufficient credits */}
+      <CreditPurchaseModal
+        open={showPurchaseModal}
+        onOpenChange={setShowPurchaseModal}
+      >
+        <div />
+      </CreditPurchaseModal>
     </div>
   );
 }
