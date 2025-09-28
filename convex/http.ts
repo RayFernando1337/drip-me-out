@@ -101,11 +101,13 @@ http.route({
           paid?: boolean;
           total_amount?: number;
           customer?: { external_id?: string; id?: string };
+          metadata?: { userId?: string; app?: string };
         };
         const isPaid = d?.paid === true || d?.status === "paid";
         if (isPaid) {
           const orderId = d?.id;
-          const externalUserId = d?.customer?.external_id;
+          // Try external_id first, fallback to metadata.userId
+          const externalUserId = d?.customer?.external_id || d?.metadata?.userId;
           const polarCustomerId = d?.customer?.id;
           const amountCents = Number(d?.total_amount ?? 0);
           if (!orderId || !externalUserId) return new Response("Accepted", { status: 202 });
