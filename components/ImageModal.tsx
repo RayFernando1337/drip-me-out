@@ -326,7 +326,6 @@ export default function ImageModal({
                   variant="outline"
                   className="flex w-full items-center justify-center gap-2"
                 >
-                  <X className="h-4 w-4" />
                   Share on X
                 </Button>
                 {typeof navigator !== "undefined" && "share" in navigator && (

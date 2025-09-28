@@ -41,9 +41,18 @@ export const getCurrentUserCredits = query({
       };
     }
     
-    // Check if user is still in free trial period (7 days from account creation)
+    // Check if user is still in free trial period
+    // Free trial ends when: (1) 7 days have passed OR (2) user has made any purchase
     const freeTrialDuration = 7 * 24 * 60 * 60 * 1000; // 7 days in milliseconds
-    const hasFreeTrial = user.createdAt > Date.now() - freeTrialDuration;
+    const timeBasedTrialExpired = user.createdAt <= Date.now() - freeTrialDuration;
+    
+    // Check if user has made any purchases (which ends free trial immediately)
+    const hasMadePurchase = await ctx.db
+      .query("payments")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .first();
+    
+    const hasFreeTrial = !timeBasedTrialExpired && !hasMadePurchase;
     
     return {
       credits: user.credits,

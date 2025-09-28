@@ -91,7 +91,10 @@ export default function CreditPurchaseModal({ children, open, onOpenChange }: Cr
             Buy Credits
           </DialogTitle>
           <DialogDescription>
-            Credits are used to generate AI transformations of your images
+            {userCredits?.hasFreeTrial 
+              ? "Credits are used to generate AI transformations of your images"
+              : "Purchase more credits to continue generating AI transformations"
+            }
           </DialogDescription>
         </DialogHeader>
 
@@ -118,6 +121,11 @@ export default function CreditPurchaseModal({ children, open, onOpenChange }: Cr
                 {userCredits?.hasFreeTrial && (
                   <Badge variant="secondary" className="text-xs">
                     Free Trial
+                  </Badge>
+                )}
+                {userCredits && !userCredits.hasFreeTrial && userCredits.credits === 0 && (
+                  <Badge variant="outline" className="text-xs text-orange-600 border-orange-200">
+                    Out of Credits
                   </Badge>
                 )}
               </div>
