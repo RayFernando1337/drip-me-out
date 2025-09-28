@@ -4,10 +4,14 @@ import { useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useMemo } from "react";
 
 export default function CreditBalance() {
   const { isSignedIn } = useUser();
-  const credits = useQuery(api.users.getCurrentUserCredits);
+  const creditsData = useQuery(api.users.getCurrentUserCredits);
+  
+  // Memoize credits to ensure stable references and avoid unnecessary re-renders
+  const credits = useMemo(() => creditsData, [creditsData]);
 
   // Don't show for unauthenticated users
   if (!isSignedIn) {
@@ -33,12 +37,17 @@ export default function CreditBalance() {
   return (
     <Badge 
       variant={badgeVariant}
-      className="flex items-center gap-1.5 px-3 py-1.5 cursor-default"
-      title={`You have ${credits.credits} generation credits${credits.hasFreeTrial ? ' (free trial active)' : ''}`}
+      className={`flex items-center gap-1.5 px-3 py-1.5 cursor-default ${
+        isZeroCredits ? 'animate-pulse' : ''
+      }`}
+      title={`You have ${credits.credits} generation credits${credits.hasFreeTrial ? ' (free trial active)' : ''}${
+        isZeroCredits ? ' - Purchase more to continue generating images' : ''
+      }`}
     >
-      <Sparkles className="h-3.5 w-3.5" />
+      <Sparkles className={`h-3.5 w-3.5 ${isZeroCredits ? 'text-red-400' : ''}`} />
       <span className="text-sm font-medium">
         {credits.credits} credit{credits.credits !== 1 ? 's' : ''}
+        {isZeroCredits && ' - Buy More'}
       </span>
     </Badge>
   );

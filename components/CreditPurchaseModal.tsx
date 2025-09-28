@@ -31,9 +31,12 @@ function polarBase() {
 
 export default function CreditPurchaseModal({ children, open, onOpenChange }: CreditPurchaseModalProps) {
   const createCheckout = useAction(api.payments.createCheckoutSession);
-  const userCredits = useQuery(api.users.getCurrentUserCredits);
+  const userCreditsData = useQuery(api.users.getCurrentUserCredits);
   const [loading, setLoading] = useState(false);
   const { user } = useUser();
+
+  // Memoize user credits to prevent unnecessary re-renders
+  const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
 
   const customerEmail = user?.primaryEmailAddress?.emailAddress || undefined;
   const customerName = useMemo(() => {
@@ -64,7 +67,11 @@ export default function CreditPurchaseModal({ children, open, onOpenChange }: Cr
         return;
       }
 
-      toast.success("Payment confirmed", { description: "Credits will appear shortly." });
+      // Success feedback with credit expectation
+      toast.success("Payment confirmed!", { 
+        description: "420 credits will appear in your account within moments. The page credit balance will update automatically.",
+        duration: 6000,
+      });
       onOpenChange?.(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err || "");

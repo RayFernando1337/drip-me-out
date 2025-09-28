@@ -10,7 +10,6 @@ import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/re
 import { Camera, Upload, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import BuyCreditsButton from "@/components/BuyCreditsButton";
 import CreditBalance from "@/components/CreditBalance";
 import CreditPurchaseModal from "@/components/CreditPurchaseModal";
 
@@ -70,11 +69,12 @@ function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
-  const userCredits = useQuery(api.users.getCurrentUserCredits);
+  const userCreditsData = useQuery(api.users.getCurrentUserCredits);
   
-  // Determine if user can upload (has credits)
-  const canUpload = userCredits && userCredits.credits > 0;
-  const isLoadingCredits = userCredits === undefined;
+  // Memoize credit-derived values to avoid unnecessary re-renders
+  const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
+  const canUpload = useMemo(() => userCredits && userCredits.credits > 0, [userCredits]);
+  const isLoadingCredits = useMemo(() => userCredits === undefined, [userCredits]);
 
   const imageInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<File | null>(null);
@@ -100,11 +100,17 @@ function Content() {
 
   const [allGalleryImages, setAllGalleryImages] = useState<GalleryImageType[]>([]);
 
-  // Use paginated query for better performance
-  const galleryResult = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
-  const totalImagesCount = useQuery(api.images.getGalleryImagesCount) || 0;
-  const failedImages = useQuery(api.images.getFailedImages) || [];
-  const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
+  // Use paginated query for better performance with proper memoization
+  const galleryResultData = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
+  const totalImagesCountData = useQuery(api.images.getGalleryImagesCount);
+  const failedImagesData = useQuery(api.images.getFailedImages);
+  const hasActiveGenerationsData = useQuery(api.images.hasActiveGenerations);
+
+  // Memoize query results to avoid unnecessary re-renders
+  const galleryResult = useMemo(() => galleryResultData, [galleryResultData]);
+  const totalImagesCount = useMemo(() => totalImagesCountData || 0, [totalImagesCountData]);
+  const failedImages = useMemo(() => failedImagesData || [], [failedImagesData]);
+  const hasActiveGenerations = useMemo(() => hasActiveGenerationsData || false, [hasActiveGenerationsData]);
 
   // Handle pagination results with proper reactivity
   useEffect(() => {
@@ -268,10 +274,11 @@ function Content() {
             // Schedule generation using the consolidated backend mutation
             await uploadAndScheduleGeneration({ storageId });
 
-            // Show credit usage feedback
-            const remainingCredits = (userCredits?.credits || 0) - 1;
+            // Show credit usage feedback with updated balance
+            const remainingCredits = Math.max(0, (userCredits?.credits || 0) - 1);
             toast.success("Transformation started", {
               description: `Using 1 credit. ${remainingCredits} credit${remainingCredits !== 1 ? 's' : ''} remaining.`,
+              duration: 4000, // Show longer to let user see the updated balance
             });
 
             // Reset pagination to show new image at top
@@ -303,7 +310,8 @@ function Content() {
         if (errorMsg.startsWith("INSUFFICIENT_CREDITS:")) {
           setShowPurchaseModal(true);
           toast.error("No Credits Available", { 
-            description: "You need credits to generate images. Each transformation uses 1 credit." 
+            description: "You need credits to generate images. Each transformation uses 1 credit.",
+            duration: 5000,
           });
         } else {
           setUploadError(msg);
