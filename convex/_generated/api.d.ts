@@ -22,6 +22,7 @@ import type * as lib_billing from "../lib/billing.js";
 import type * as lib_images from "../lib/images.js";
 import type * as lib_users from "../lib/users.js";
 import type * as lib_validators from "../lib/validators.js";
+import type * as payments_createCheckoutSession from "../payments/createCheckoutSession.js";
 import type * as payments from "../payments.js";
 import type * as users from "../users.js";
 
@@ -43,6 +44,7 @@ declare const fullApi: ApiFromModules<{
   "lib/images": typeof lib_images;
   "lib/users": typeof lib_users;
   "lib/validators": typeof lib_validators;
+  "payments/createCheckoutSession": typeof payments_createCheckoutSession;
   payments: typeof payments;
   users: typeof users;
 }>;
