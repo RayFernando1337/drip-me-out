@@ -3,8 +3,10 @@
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -20,6 +22,7 @@ import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import {
+  AlertTriangle,
   Check,
   ChevronDown,
   ChevronLeft,
@@ -28,7 +31,7 @@ import {
   Copy,
   Settings,
   Share2,
-  X,
+  Trash2,
 } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
@@ -48,6 +51,7 @@ interface ImageModalProps {
   isOpen: boolean;
   onClose: () => void;
   onImageIndexChange?: (index: number) => void;
+  onDeleted?: (imageId: Id<"images">) => void;
 }
 
 export default function ImageModal({
@@ -56,6 +60,7 @@ export default function ImageModal({
   isOpen,
   onClose,
   onImageIndexChange,
+  onDeleted,
 }: ImageModalProps) {
   const currentImage = selectedImageIndex !== null ? images[selectedImageIndex] : null;
 
@@ -66,6 +71,8 @@ export default function ImageModal({
     (currentImage as ImageWithFeatured | null)?.isFeatured === true &&
       (currentImage as ImageWithFeatured | null)?.isDisabledByAdmin !== true
   );
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Update state when image prop changes
   useEffect(() => {
@@ -117,6 +124,7 @@ export default function ImageModal({
   }, [isOpen, canNavigate, goToPrevious, goToNext]);
   const updateShareSettings = useMutation(api.images.updateShareSettings);
   const updateFeaturedStatus = useMutation(api.images.updateFeaturedStatus);
+  const deleteImageMutation = useMutation(api.images.deleteImage);
 
   if (!currentImage) return null;
 
@@ -142,7 +150,7 @@ export default function ImageModal({
 
   const handleTwitterShare = () => {
     const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
-    const text = "Check out my AI-generated diamond chain photo! 💎⛓️";
+    const text = "Check out my AI-generated anime transformation! 🎨✨";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");
   };
@@ -174,8 +182,8 @@ export default function ImageModal({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "My Dripped Out Photo",
-          text: "Check out my AI-generated diamond chain!",
+          title: "My Anime Transformation",
+          text: "Check out my anime transformation!",
           url: shareUrl,
         });
       } catch {
@@ -221,6 +229,27 @@ export default function ImageModal({
     if (hoursLeft <= 168) return "168";
     if (hoursLeft <= 720) return "720";
     return "never";
+  };
+
+  const handleDelete = async () => {
+    if (!currentImage) return;
+
+    setIsDeleting(true);
+    try {
+      await deleteImageMutation({ imageId: currentImage._id });
+      toast.success("Image deleted", {
+        description: "The image and its generated versions were removed.",
+      });
+      // Inform parent so it can update local state without resetting pagination/scroll
+      onDeleted?.(currentImage._id as Id<"images">);
+      setIsDeleteDialogOpen(false);
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete image";
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -296,7 +325,6 @@ export default function ImageModal({
                   variant="outline"
                   className="flex w-full items-center justify-center gap-2"
                 >
-                  <X className="h-4 w-4" />
                   Share on X
                 </Button>
                 {typeof navigator !== "undefined" && "share" in navigator && (
@@ -384,6 +412,28 @@ export default function ImageModal({
                     {isAdminLocked && (
                       <p className="text-xs text-destructive/80">{adminLockMessage}</p>
                     )}
+
+                    <div className="border-t pt-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1">
+                            <h3 className="text-sm font-medium text-destructive">Danger Zone</h3>
+                            <p className="text-xs text-muted-foreground">
+                              Permanently delete this image and all versions
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setIsDeleteDialogOpen(true)}
+                          className="w-full flex items-center gap-2"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete Image
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -391,6 +441,44 @@ export default function ImageModal({
           </div>
         </div>
       </DialogContent>
+
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Delete Image?
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground">
+              This will permanently remove this image and all generated versions. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-end sm:space-x-2">
+            <DialogClose asChild>
+              <Button variant="outline" disabled={isDeleting}>
+                Keep Image
+              </Button>
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2"
+            >
+              {isDeleting ? (
+                <span className="flex items-center gap-2">
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                  Deleting...
+                </span>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4" /> Delete Image
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

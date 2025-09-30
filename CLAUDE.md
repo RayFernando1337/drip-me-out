@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Drip Me Out is an AI-powered image transformation app that adds diamond chains to photos using Google's Gemini 2.5 Flash model. Built with Next.js 15 and powered by Convex's real-time backend platform.
+Anime Studio is an AI-powered image transformation app that transforms everyday objects into magical anime illustrations using Google's Gemini 2.5 Flash model. Built with Next.js 15 and powered by Convex's real-time backend platform.
 
 ## Development Commands
 

@@ -4,6 +4,8 @@ import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
+import { getEffectiveBillingSettings } from "./lib/billing";
+import { assertAdmin } from "./lib/auth";
 
 // Reactive admin utilities
 export const getAdminStatus = query({
@@ -194,5 +196,72 @@ export const getAdminFeaturedImages = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// Admin billing settings (reactive)
+export const getBillingSettings = query({
+  args: {},
+  returns: v.object({
+    packPriceCents: v.number(),
+    creditsPerPack: v.number(),
+    refundOnFailure: v.boolean(),
+    freeTrialCredits: v.number(),
+    updatedAt: v.union(v.number(), v.null()),
+    updatedBy: v.union(v.string(), v.null()),
+    isDefault: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    // Only admins may view/edit billing settings (to keep it simple)
+    await assertAdmin(ctx as any);
+    const settings = await ctx.db.query("billingSettings").take(1);
+    if (settings.length === 0) {
+      const eff = await getEffectiveBillingSettings(ctx);
+      return {
+        ...eff,
+        updatedAt: null,
+        updatedBy: null,
+        isDefault: true,
+      };
+    }
+    const s = settings[0] as any;
+    return {
+      packPriceCents: s.packPriceCents,
+      creditsPerPack: s.creditsPerPack,
+      refundOnFailure: s.refundOnFailure,
+      freeTrialCredits: s.freeTrialCredits,
+      updatedAt: s.updatedAt ?? null,
+      updatedBy: s.updatedBy ?? null,
+      isDefault: false,
+    };
+  },
+});
+
+export const updateBillingSettings = mutation({
+  args: {
+    packPriceCents: v.number(),
+    creditsPerPack: v.number(),
+    refundOnFailure: v.boolean(),
+    freeTrialCredits: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const identity = await assertAdmin(ctx as any);
+    const now = Date.now();
+    const existing = await ctx.db.query("billingSettings").take(1);
+    if (existing.length === 0) {
+      await ctx.db.insert("billingSettings", {
+        ...args,
+        updatedAt: now,
+        updatedBy: identity.subject,
+      });
+    } else {
+      await ctx.db.patch((existing[0] as any)._id, {
+        ...args,
+        updatedAt: now,
+        updatedBy: identity.subject,
+      });
+    }
+    return null;
   },
 });

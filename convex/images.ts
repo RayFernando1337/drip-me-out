@@ -2,9 +2,10 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
-import { assertOwner } from "./lib/auth";
+import { assertOwner, requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
 import { PaginatedGalleryValidator } from "./lib/validators";
+import { getOrCreateUser } from "./lib/users";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -23,7 +24,17 @@ export const uploadAndScheduleGeneration = mutation({
   handler: async (ctx, args) => {
     const { storageId } = args;
 
-    // Validate file metadata (size/type) before inserting
+    // Require authentication
+    const identity = await requireIdentity(ctx);
+    const userId = identity.subject;
+
+    // Get or create user and check credits
+    const user = await getOrCreateUser(ctx, userId);
+    if (user.credits < 1) {
+      throw new Error("INSUFFICIENT_CREDITS: You need at least 1 credit to generate an image. Please purchase credits to continue.");
+    }
+
+    // Validate file metadata (size/type) before consuming credits
     const meta = await ctx.db.system.get(storageId);
     if (!meta) throw new Error("VALIDATION: Missing storage metadata");
 
@@ -38,9 +49,11 @@ export const uploadAndScheduleGeneration = mutation({
       throw new Error("VALIDATION: File exceeds 5 MB limit");
     }
 
-    // Track user identity if available (Clerk)
-    const identity = await ctx.auth.getUserIdentity();
-    const userId = identity?.subject;
+    // Atomically decrement credits BEFORE scheduling generation
+    await ctx.db.patch(user._id, {
+      credits: user.credits - 1,
+      updatedAt: Date.now(),
+    });
 
     // Create the original image record with pending status
     const originalImageId = await ctx.db.insert("images", {
@@ -103,8 +116,7 @@ export const updateFeaturedStatus = mutation({
     if (!image) throw new Error("Image not found");
     // Backward-compat: older images may not have userId set.
     // If missing, claim ownership to the current user before proceeding.
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
+    const identity = await requireIdentity(ctx);
     if (!image.userId) {
       await ctx.db.patch(args.imageId, { userId: identity.subject });
     } else {
@@ -142,6 +154,91 @@ export const sendImage = mutation({
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
     });
+  },
+});
+
+export const deleteImage = mutation({
+  args: {
+    imageId: v.id("images"),
+    includeGenerated: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    deletedTotal: v.number(),
+    deletedGenerated: v.number(),
+    actedAsAdmin: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const image = await ctx.db.get(args.imageId);
+    if (!image) {
+      return { deletedTotal: 0, deletedGenerated: 0, actedAsAdmin: false };
+    }
+
+    const identity = await requireIdentity(ctx);
+    const adminRecord = await ctx.db
+      .query("admins")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .unique();
+    const actedAsAdmin = !!adminRecord;
+
+    if (!actedAsAdmin) {
+      if (!image.userId) {
+        await ctx.db.patch(args.imageId, { userId: identity.subject });
+      } else if (image.userId !== identity.subject) {
+        throw new Error("Not authorized to modify this image");
+      }
+    }
+
+    const includeGenerated = args.includeGenerated ?? true;
+    const docsToDelete: Array<typeof image> = [image];
+
+    if (includeGenerated && image.isGenerated !== true) {
+      const generatedDocs = await ctx.db
+        .query("images")
+        .withIndex("by_originalImageId", (q) => q.eq("originalImageId", args.imageId))
+        .collect();
+      docsToDelete.push(...generatedDocs);
+    }
+
+    const seenIds = new Set<string>();
+    const uniqueDocs: Array<typeof image> = [];
+    for (const doc of docsToDelete) {
+      if (seenIds.has(doc._id)) continue;
+      seenIds.add(doc._id);
+      uniqueDocs.push(doc);
+    }
+
+    let deletedGenerated = 0;
+
+    for (const doc of uniqueDocs) {
+      if (doc._id !== image._id && doc.isGenerated === true) {
+        deletedGenerated += 1;
+      }
+
+      try {
+        await ctx.storage.delete(doc.body);
+      } catch (error) {
+        console.warn("[deleteImage] Failed to delete storage blob", {
+          imageId: doc._id,
+          storageId: doc.body,
+          error,
+        });
+      }
+
+      try {
+        await ctx.db.delete(doc._id);
+      } catch (error) {
+        console.warn("[deleteImage] Failed to delete image document", {
+          imageId: doc._id,
+          error,
+        });
+      }
+    }
+
+    return {
+      deletedTotal: uniqueDocs.length,
+      deletedGenerated,
+      actedAsAdmin,
+    };
   },
 });
 
@@ -234,56 +331,22 @@ export const getFailedImages = query({
   returns: v.array(
     v.object({
       _id: v.id("images"),
-      _creationTime: v.number(),
-      body: v.id("_storage"),
-      createdAt: v.number(),
-      isGenerated: v.optional(v.boolean()),
-      originalImageId: v.optional(v.id("images")),
-      generationStatus: v.optional(
-        v.union(
-          v.literal("pending"),
-          v.literal("processing"),
-          v.literal("completed"),
-          v.literal("failed")
-        )
-      ),
-      generationError: v.optional(v.string()),
-      generationAttempts: v.optional(v.number()),
-      sharingEnabled: v.optional(v.boolean()),
-      shareExpiresAt: v.optional(v.number()),
-      userId: v.optional(v.string()),
-      isFeatured: v.optional(v.boolean()),
-      featuredAt: v.optional(v.number()),
-      isDisabledByAdmin: v.optional(v.boolean()),
-      disabledByAdminAt: v.optional(v.number()),
-      disabledByAdminReason: v.optional(v.string()),
-      url: v.string(),
     })
   ),
   handler: async (ctx) => {
-    // Use proper index for failed originals only
-    const failedImages = await ctx.db
+    const identity = await requireIdentity(ctx);
+    // Scope to current user and filter locally for failed originals
+    const userImages = await ctx.db
       .query("images")
-      .withIndex("by_is_generated_and_status", (q) =>
-        q.eq("isGenerated", false).eq("generationStatus", "failed")
-      )
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
       .order("desc")
       .collect();
 
-    // OPTIMIZATION: Batch URL generation for better performance
-    const storageIds = failedImages.map((img) => img.body);
-    const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
-
-    // Map URLs back to images efficiently
-    const imagesWithUrls = failedImages.map((image, index) => ({
-      ...image,
-      url: urls[index],
-    }));
-
-    // Filter out images without URLs and assert type
-    return imagesWithUrls.filter(
-      (image): image is typeof image & { url: string } => image.url !== null
+    const failedOriginals = userImages.filter(
+      (img) => img.isGenerated !== true && img.generationStatus === "failed"
     );
+
+    return failedOriginals.map((img) => ({ _id: img._id }));
   },
 });
 
@@ -292,20 +355,24 @@ export const hasActiveGenerations = query({
   args: {},
   returns: v.boolean(),
   handler: async (ctx) => {
-    // Use separate index queries instead of filters
-    const pendingCount = await ctx.db
-      .query("images")
-      .withIndex("by_generation_status", (q) => q.eq("generationStatus", "pending"))
-      .take(1);
+    const identity = await requireIdentity(ctx);
+    // Check pending/processing for current user only using user-scoped index
+    const [pendingOne, processingOne] = await Promise.all([
+      ctx.db
+        .query("images")
+        .withIndex("by_userId_and_generationStatus", (q) =>
+          q.eq("userId", identity.subject).eq("generationStatus", "pending")
+        )
+        .take(1),
+      ctx.db
+        .query("images")
+        .withIndex("by_userId_and_generationStatus", (q) =>
+          q.eq("userId", identity.subject).eq("generationStatus", "processing")
+        )
+        .take(1),
+    ]);
 
-    if (pendingCount.length > 0) return true;
-
-    const processingCount = await ctx.db
-      .query("images")
-      .withIndex("by_generation_status", (q) => q.eq("generationStatus", "processing"))
-      .take(1);
-
-    return processingCount.length > 0;
+    return pendingOne.length > 0 || processingOne.length > 0;
   },
 });
 
@@ -348,30 +415,36 @@ export const getGalleryImagesPaginated = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, args) => {
-    // STRATEGY: Use the default order (by _creationTime desc) and leverage Post-Processing
-    // This is faster than complex index combinations for mixed queries
-    const result = await ctx.db.query("images").order("desc").paginate(args.paginationOpts);
+    const identity = await requireIdentity(ctx);
+    // Fetch per-user, ordered by createdAt, and overfetch to account for filtering
+    const adjustedPaginationOpts = {
+      ...args.paginationOpts,
+      numItems: Math.ceil(args.paginationOpts.numItems * 1.5),
+    };
+
+    const result = await ctx.db
+      .query("images")
+      .withIndex("by_userId_and_createdAt", (q) => q.eq("userId", identity.subject))
+      .order("desc")
+      .paginate(adjustedPaginationOpts);
 
     // Efficiently filter for gallery items (avoid expensive operations)
     const galleryImages: typeof result.page = [];
 
     for (const img of result.page) {
-      // Include all generated images (completed transformations)
       if (img.isGenerated === true) {
         galleryImages.push(img);
         continue;
       }
-
-      // Include only pending/processing originals (placeholders)
       const status = img.generationStatus;
       if (status === "pending" || status === "processing") {
         galleryImages.push(img);
       }
-      // Skip failed originals (they go to failed tab)
     }
 
-    // OPTIMIZATION: Batch URL generation for filtered gallery images
-    if (galleryImages.length === 0) {
+    const trimmedGalleryImages = galleryImages.slice(0, args.paginationOpts.numItems);
+
+    if (trimmedGalleryImages.length === 0) {
       return {
         page: [],
         isDone: result.isDone,
@@ -379,23 +452,23 @@ export const getGalleryImagesPaginated = query({
       };
     }
 
-    const storageIds = galleryImages.map((img) => img.body);
+    const storageIds = trimmedGalleryImages.map((img) => img.body);
     const urls = await Promise.all(storageIds.map((id) => ctx.storage.getUrl(id)));
 
-    // Map URLs back to images efficiently
-    const imagesWithUrls = galleryImages.map((image, index) => ({
+    const imagesWithUrls = trimmedGalleryImages.map((image, index) => ({
       ...image,
       url: urls[index],
     }));
 
-    // Filter out images without URLs and assert type
     const validImages = imagesWithUrls.filter(
       (image): image is typeof image & { url: string } => image.url !== null
     );
 
+    const actuallyDone = result.isDone && validImages.length < args.paginationOpts.numItems;
+
     return {
       page: validImages,
-      isDone: result.isDone,
+      isDone: actuallyDone,
       continueCursor: result.continueCursor,
     };
   },
@@ -406,32 +479,23 @@ export const getGalleryImagesCount = query({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    // Count each category using indexes for better performance
-    const [generatedImages, pendingImages, processingImages] = await Promise.all([
-      // All generated images
-      ctx.db
-        .query("images")
-        .withIndex("by_is_generated", (q) => q.eq("isGenerated", true))
-        .collect(),
+    const identity = await requireIdentity(ctx);
+    // Count only the current user's images
+    const userImages = await ctx.db
+      .query("images")
+      .withIndex("by_userId", (q) => q.eq("userId", identity.subject))
+      .collect();
 
-      // Pending originals
-      ctx.db
-        .query("images")
-        .withIndex("by_is_generated_and_status", (q) =>
-          q.eq("isGenerated", false).eq("generationStatus", "pending")
-        )
-        .collect(),
+    let generated = 0;
+    let pending = 0;
+    let processing = 0;
+    for (const img of userImages) {
+      if (img.isGenerated === true) generated += 1;
+      else if (img.generationStatus === "pending") pending += 1;
+      else if (img.generationStatus === "processing") processing += 1;
+    }
 
-      // Processing originals
-      ctx.db
-        .query("images")
-        .withIndex("by_is_generated_and_status", (q) =>
-          q.eq("isGenerated", false).eq("generationStatus", "processing")
-        )
-        .collect(),
-    ]);
-
-    return generatedImages.length + pendingImages.length + processingImages.length;
+    return generated + pending + processing;
   },
 });
 

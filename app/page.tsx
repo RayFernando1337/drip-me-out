@@ -1,15 +1,17 @@
 "use client";
 import ImagePreview from "@/components/ImagePreview";
-import PublicGallery from "@/components/PublicGallery";
 import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { SignInButton, UserButton } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { Camera, Upload } from "lucide-react";
+import { Camera, Upload, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import CreditBalance from "@/components/CreditBalance";
+import CreditPurchaseModal from "@/components/CreditPurchaseModal";
+import HeroGalleryDemo from "@/components/HeroGalleryDemo";
 
 export default function Home() {
   return (
@@ -20,7 +22,7 @@ export default function Home() {
       <Unauthenticated>
         <div className="flex flex-col w-full min-h-screen">
           {/* Header for unauthenticated users */}
-          <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
+          <header className="sticky top-0 z-50 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -31,31 +33,9 @@ export default function Home() {
           </header>
 
           {/* Main content for unauthenticated users */}
-          <main className="flex-1 flex flex-col items-center justify-center gap-12 p-6 text-center">
-            <div className="space-y-8 max-w-3xl">
-              <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-purple-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg breathe">
-                <Upload className="w-10 h-10 text-white" />
-              </div>
-              <div className="space-y-6">
-                <h2 className="text-3xl md:text-5xl font-semibold tracking-tight">
-                  Bring your photos to life
-                </h2>
-                <p className="text-muted-foreground text-lg md:text-xl leading-relaxed max-w-2xl mx-auto">
-                  Transform objects in your photos into magical 2D anime illustrations. Sign in to
-                  upload images and watch as everyday items come to life with whimsical anime charm!
-                </p>
-              </div>
-              {/* Public gallery showcase */}
-              <div className="w-full max-w-7xl">
-                <PublicGallery />
-              </div>
-
-              <SignInButton>
-                <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
-                  Start Creating
-                </Button>
-              </SignInButton>
-            </div>
+          <main className="flex-1">
+            {/* Hero Gallery Scroll Animation */}
+            <HeroGalleryDemo />
           </main>
         </div>
       </Unauthenticated>
@@ -67,6 +47,12 @@ function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
+  const userCreditsData = useQuery(api.users.getCurrentUserCredits);
+  
+  // Memoize credit-derived values to avoid unnecessary re-renders
+  const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
+  const canUpload = useMemo(() => userCredits && userCredits.credits > 0, [userCredits]);
+  const isLoadingCredits = useMemo(() => userCredits === undefined, [userCredits]);
 
   const imageInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<File | null>(null);
@@ -78,12 +64,13 @@ function Content() {
   const [showMobileCamera, setShowMobileCamera] = useState(false);
   const [showDesktopCamera, setShowDesktopCamera] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
-  // Pagination state - Load 16 images at a time (divisible by 4-column grid)
+  // Pagination state - base page size; adjusted dynamically to keep 4-column rows filled
   const [paginationOpts, setPaginationOpts] = useState<{
     numItems: number;
     cursor: string | null;
-  }>({ numItems: 16, cursor: null });
+  }>({ numItems: 12, cursor: null });
   // Type for gallery images - infer from the paginated query
   type GalleryImageType = NonNullable<
     ReturnType<typeof useQuery<typeof api.images.getGalleryImagesPaginated>>
@@ -91,29 +78,41 @@ function Content() {
 
   const [allGalleryImages, setAllGalleryImages] = useState<GalleryImageType[]>([]);
 
-  // Use paginated query for better performance
-  const galleryResult = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
-  const totalImagesCount = useQuery(api.images.getGalleryImagesCount) || 0;
-  const failedImages = useQuery(api.images.getFailedImages) || [];
-  const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
+  // Use paginated query for better performance with proper memoization
+  const galleryResultData = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
+  const totalImagesCountData = useQuery(api.images.getGalleryImagesCount);
+  const failedImagesData = useQuery(api.images.getFailedImages);
+  const hasActiveGenerationsData = useQuery(api.images.hasActiveGenerations);
+
+  // Memoize query results to avoid unnecessary re-renders
+  const galleryResult = useMemo(() => galleryResultData, [galleryResultData]);
+  const totalImagesCount = useMemo(() => totalImagesCountData || 0, [totalImagesCountData]);
+  const failedImages = useMemo(() => failedImagesData || [], [failedImagesData]);
+  const hasActiveGenerations = useMemo(() => hasActiveGenerationsData || false, [hasActiveGenerationsData]);
 
   // Handle pagination results with proper reactivity
   useEffect(() => {
     if (galleryResult?.page) {
-      if (paginationOpts.cursor === null) {
-        // First page - replace all images (handles new generations)
-        setAllGalleryImages(galleryResult.page);
-      } else {
-        // Additional pages - append to existing images
-        setAllGalleryImages((prev) => {
-          // Avoid duplicates by checking IDs
+      setAllGalleryImages((prev) => {
+        if (paginationOpts.cursor === null) {
+          // First page - replace all images (handles new generations AND deletions)
+          return galleryResult.page;
+        } else {
+          // Additional pages - append to existing images, avoiding duplicates
           const existingIds = new Set(prev.map((img) => img._id));
           const newImages = galleryResult.page.filter((img) => !existingIds.has(img._id));
           return [...prev, ...newImages];
-        });
-      }
+        }
+      });
     }
   }, [galleryResult, paginationOpts.cursor]);
+
+  // Track total count to detect external additions (no hard reset on decreases)
+  const prevTotalCount = useRef(totalImagesCount);
+  useEffect(() => {
+    // If total count increases and we're on first page, Convex reactivity will refresh
+    prevTotalCount.current = totalImagesCount;
+  }, [totalImagesCount]);
 
   // Auto-refresh when new images complete (reactive to total count changes)
   useEffect(() => {
@@ -126,21 +125,61 @@ function Content() {
   // Load more function
   const loadMoreImages = useCallback(() => {
     if (galleryResult?.continueCursor && !galleryResult.isDone) {
+      const currentCount = allGalleryImages.length;
+      const remainder = currentCount % 4;
+      const fill = remainder === 0 ? 0 : 4 - remainder;
+      const base = 12;
+      const numItems = base + fill; // ensure new total ends as multiple of 4
       setPaginationOpts({
-        numItems: 16,
+        numItems,
         cursor: galleryResult.continueCursor,
       });
     }
-  }, [galleryResult]);
+  }, [galleryResult, allGalleryImages.length]);
 
   // Reset pagination when new images are uploaded
   const resetPagination = useCallback(() => {
-    setPaginationOpts({ numItems: 16, cursor: null });
+    setPaginationOpts({ numItems: 12, cursor: null });
     setAllGalleryImages([]);
   }, []);
 
+  // Handle local deletion to avoid full reset and preserve scroll position
+  const handleDeleted = useCallback(
+    (imageId: Id<"images">) => {
+      setAllGalleryImages((prev) => prev.filter((img) => img._id !== imageId));
+
+      // Top-off to keep rows filled if more items are available
+      if (galleryResult?.continueCursor && !galleryResult.isDone) {
+        const nextCount = allGalleryImages.length - 1;
+        const remainder = ((nextCount % 4) + 4) % 4;
+        const fill = remainder === 0 ? 0 : 4 - remainder;
+        if (fill > 0) {
+          setPaginationOpts({ numItems: fill, cursor: galleryResult.continueCursor });
+        }
+      }
+    },
+    [galleryResult, allGalleryImages.length]
+  );
+
   // Memoize gallery images for stable references
   const galleryImages = useMemo(() => allGalleryImages || [], [allGalleryImages]);
+
+  // Auto-top-off after merges if last row is incomplete and more items exist
+  const lastAutoFillCursorRef = useRef<string | null>(null);
+  useEffect(() => {
+    const remainder = allGalleryImages.length % 4;
+    const canContinue = !!galleryResult?.continueCursor && !galleryResult.isDone;
+    if (remainder > 0 && canContinue) {
+      const cursor = galleryResult!.continueCursor as string;
+      if (lastAutoFillCursorRef.current !== cursor) {
+        lastAutoFillCursorRef.current = cursor;
+        const fill = 4 - remainder;
+        setPaginationOpts({ numItems: fill, cursor });
+      }
+    } else if (remainder === 0) {
+      lastAutoFillCursorRef.current = null;
+    }
+  }, [allGalleryImages.length, galleryResult]);
 
   // Map low-level errors to friendly, user-facing messages
   const toUserMessage = useCallback((error: unknown): string => {
@@ -150,6 +189,9 @@ function Content() {
     }
     if (msg.startsWith("VALIDATION:")) {
       return msg.replace(/^VALIDATION:\s*/, "");
+    }
+    if (msg.startsWith("INSUFFICIENT_CREDITS:")) {
+      return msg.replace(/^INSUFFICIENT_CREDITS:\s*/, "");
     }
     // Fallback
     return "Something went wrong. Please try again.";
@@ -210,8 +252,11 @@ function Content() {
             // Schedule generation using the consolidated backend mutation
             await uploadAndScheduleGeneration({ storageId });
 
+            // Show credit usage feedback with updated balance
+            const remainingCredits = Math.max(0, (userCredits?.credits || 0) - 1);
             toast.success("Transformation started", {
-              description: "Your image is being processed",
+              description: `Using 1 credit. ${remainingCredits} credit${remainingCredits !== 1 ? 's' : ''} remaining.`,
+              duration: 4000, // Show longer to let user see the updated balance
             });
 
             // Reset pagination to show new image at top
@@ -237,15 +282,26 @@ function Content() {
       } catch (error) {
         console.error("Upload failed:", error);
         const msg = toUserMessage(error);
-        setUploadError(msg);
-        toast.error("Upload failed", { description: msg });
+        const errorMsg = error instanceof Error ? error.message : String(error || "");
+        
+        // If it's an insufficient credits error, show the purchase modal
+        if (errorMsg.startsWith("INSUFFICIENT_CREDITS:")) {
+          setShowPurchaseModal(true);
+          toast.error("No Credits Available", { 
+            description: "You need credits to generate images. Each transformation uses 1 credit.",
+            duration: 5000,
+          });
+        } else {
+          setUploadError(msg);
+          toast.error("Upload failed", { description: msg });
+        }
         return false; // Failed
       } finally {
         setIsPreparing(false);
         setIsUploading(false);
       }
     },
-    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage, resetPagination]
+    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage, resetPagination, userCredits?.credits]
   );
 
   const handleImageCapture = async (imageData: string) => {
@@ -343,13 +399,33 @@ function Content() {
         </div>
 
         <div className="flex items-center gap-4">
+          {/* Unified Credit UI - either clickable balance (when 0) or separate button */}
+          {userCredits?.credits === 0 ? (
+            <CreditPurchaseModal>
+              <CreditBalance />
+            </CreditPurchaseModal>
+          ) : (
+            <>
+              <CreditBalance />
+              <CreditPurchaseModal>
+                <Button variant="outline" size="sm">
+                  Buy Credits
+                </Button>
+              </CreditPurchaseModal>
+            </>
+          )}
           {/* Desktop Webcam Toggle */}
           <div className="hidden md:flex items-center">
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowDesktopCamera(!showDesktopCamera)}
-              className="flex items-center gap-2 text-muted-foreground hover:text-foreground"
+              disabled={!canUpload}
+              className={`flex items-center gap-2 ${
+                !canUpload 
+                  ? "text-muted-foreground/50" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
             >
               <Camera className="w-4 h-4" />
               {showDesktopCamera ? "Hide Camera" : "Camera"}
@@ -384,18 +460,20 @@ function Content() {
               {/* Prominent Hero Drop Zone */}
               <div className="w-full max-w-4xl">
                 <div
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
+                  onDragOver={canUpload ? handleDragOver : undefined}
+                  onDragLeave={canUpload ? handleDragLeave : undefined}
+                  onDrop={canUpload ? handleDrop : undefined}
                   className={`
                     hero-drop-zone min-h-[280px] md:min-h-[360px] 
                     border-2 border-dashed rounded-3xl 
-                    transition-all duration-300 ease-out cursor-pointer
-                    ${!isPreparing && !isUploading ? "breathe" : ""}
+                    transition-all duration-300 ease-out
+                    ${!isPreparing && !isUploading && canUpload ? "breathe cursor-pointer" : ""}
+                    ${!canUpload ? "opacity-60 cursor-not-allowed" : ""}
                     ${
-                      isDragOver
+                      isDragOver && canUpload
                         ? "border-primary bg-gradient-to-br from-primary/10 to-purple-500/10 scale-[1.01] shadow-xl"
-                        : "border-border/40 hover:border-primary/40 hover:shadow-lg"
+                        : canUpload ? "border-border/40 hover:border-primary/40 hover:shadow-lg cursor-pointer" 
+                        : "border-border/30"
                     }
                     ${isPreparing || isUploading ? "opacity-50 cursor-not-allowed" : ""}
                   `}
@@ -412,6 +490,22 @@ function Content() {
                             {isPreparing ? "Preparing image..." : "Uploading..."}
                           </p>
                           <p className="text-sm text-muted-foreground">This may take a moment</p>
+                        </div>
+                      </div>
+                    ) : !canUpload ? (
+                      <div className="text-center space-y-6">
+                        <div className="w-12 h-12 mx-auto rounded-full bg-muted flex items-center justify-center">
+                          <Sparkles className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                        <div className="space-y-3">
+                          <p className="text-xl md:text-2xl font-semibold text-muted-foreground">
+                            {isLoadingCredits ? "Loading..." : "No Credits Available"}
+                          </p>
+                          <p className="text-muted-foreground">
+                            {isLoadingCredits 
+                              ? "Checking your account..." 
+                              : "You need credits to generate images. Each transformation uses 1 credit."}
+                          </p>
                         </div>
                       </div>
                     ) : (
@@ -431,6 +525,8 @@ function Content() {
                           </p>
                           <p className="text-muted-foreground">
                             or click anywhere to browse • JPEG, PNG, HEIC supported
+                            <br />
+                            <span className="text-xs">Uses 1 credit per transformation</span>
                           </p>
                         </div>
                       </div>
@@ -449,7 +545,7 @@ function Content() {
                         uploadImage(file);
                       }
                     }}
-                    disabled={isPreparing || isUploading}
+                    disabled={isPreparing || isUploading || !canUpload}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
                   />
                 </div>
@@ -459,7 +555,12 @@ function Content() {
                   <button
                     type="button"
                     onClick={() => setShowMobileCamera(!showMobileCamera)}
-                    className="flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors py-2 px-4 rounded-lg hover:bg-muted/50"
+                    disabled={!canUpload}
+                    className={`flex items-center gap-2 transition-colors py-2 px-4 rounded-lg ${
+                      !canUpload 
+                        ? "text-muted-foreground/50 cursor-not-allowed" 
+                        : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                    }`}
                   >
                     <Camera className="w-4 h-4" />
                     <span className="text-sm font-medium">
@@ -579,6 +680,7 @@ function Content() {
                 onLoadMore={loadMoreImages}
                 hasMore={!galleryResult?.isDone && !!galleryResult?.continueCursor}
                 isLoading={galleryResult === undefined}
+                onDeleted={handleDeleted}
               />
             </div>
           )}
@@ -637,6 +739,14 @@ function Content() {
           </div>
         </footer>
       )}
+
+      {/* Controlled Purchase Modal for insufficient credits */}
+      <CreditPurchaseModal
+        open={showPurchaseModal}
+        onOpenChange={setShowPurchaseModal}
+      >
+        <div />
+      </CreditPurchaseModal>
     </div>
   );
 }

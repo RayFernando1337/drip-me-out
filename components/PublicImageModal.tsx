@@ -91,8 +91,8 @@ function PublicImageModal({ image, isOpen, onClose }: PublicImageModalProps) {
 
             <div className="flex-1 space-y-6 overflow-y-auto px-6 pb-6 pt-4 text-sm">
               <p className="text-muted-foreground">
-                Get inspired by real creations from the Drip Me Out community. Sign in to transform your own
-                photos with shimmering diamond chains and anime flair.
+                Get inspired by real creations from the Anime Studio community. Sign in to transform your own
+                photos into magical anime illustrations with Studio Ghibli-inspired charm.
               </p>
 
               <SignInButton>

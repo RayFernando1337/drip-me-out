@@ -5,6 +5,12 @@ import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
 import Image from "next/image";
 import { useState } from "react";
+import { toast } from "sonner";
+
+type FeaturedImagesResult = NonNullable<
+  ReturnType<typeof useQuery<typeof api.admin.getAdminFeaturedImages>>
+>;
+type FeaturedImage = FeaturedImagesResult["page"][number];
 
 export default function AdminModerationDashboard() {
   const [paginationOpts, setPaginationOpts] = useState({
@@ -14,8 +20,11 @@ export default function AdminModerationDashboard() {
   const featuredImages = useQuery(api.admin.getAdminFeaturedImages, { paginationOpts });
   const disableImage = useMutation(api.admin.disableFeaturedImage);
   const enableImage = useMutation(api.admin.enableFeaturedImage);
+  const deleteImage = useMutation(api.images.deleteImage);
   const [disableReason, setDisableReason] = useState("");
   const [selectedImageId, setSelectedImageId] = useState<Id<"images"> | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<FeaturedImage | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDisableImage = async (imageId: Id<"images">) => {
     await disableImage({ imageId, reason: disableReason || "Policy violation" });
@@ -25,6 +34,46 @@ export default function AdminModerationDashboard() {
 
   const handleEnableImage = async (imageId: Id<"images">) => {
     await enableImage({ imageId });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      const result = await deleteImage({
+        imageId: deleteTarget._id as Id<"images">,
+        includeGenerated: true,
+      });
+
+      if (result.deletedTotal === 0) {
+        toast.info("Already deleted", {
+          description: "This image was no longer present in storage or the database.",
+        });
+      } else {
+        const originalCount = result.deletedTotal - result.deletedGenerated;
+        const segments: string[] = [];
+        if (originalCount > 0) {
+          segments.push(`${originalCount} original${originalCount === 1 ? "" : "s"}`);
+        }
+        if (result.deletedGenerated > 0) {
+          segments.push(
+            `${result.deletedGenerated} generated version${result.deletedGenerated === 1 ? "" : "s"}`
+          );
+        }
+        const descriptionParts = segments.length > 0 ? `Removed ${segments.join(" and ")}.` : undefined;
+        toast.success("Image deleted", {
+          description: result.actedAsAdmin
+            ? `${descriptionParts ?? "Deletion completed."} The user can no longer access this photo.`
+            : descriptionParts ?? "Deletion completed.",
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete image";
+      toast.error(message);
+    } finally {
+      setIsDeleting(false);
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -93,6 +142,17 @@ export default function AdminModerationDashboard() {
                       Disable
                     </Button>
                   )}
+                  <Button
+                    onClick={() => {
+                      setSelectedImageId(null);
+                      setDeleteTarget(image);
+                    }}
+                    variant="destructive"
+                    size="sm"
+                    className="ml-auto"
+                  >
+                    Delete
+                  </Button>
                 </div>
               </div>
             </div>
@@ -143,6 +203,52 @@ export default function AdminModerationDashboard() {
                 variant="destructive"
               >
                 Disable Image
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full space-y-4">
+            <h3 className="text-lg font-semibold text-destructive">Delete User&apos;s Image?</h3>
+            <p className="text-sm text-muted-foreground">
+              This will permanently remove this user&apos;s image and all generated versions. This action cannot be undone.
+            </p>
+            <div className="rounded-md border border-border/20 bg-muted/30 p-3 text-xs text-muted-foreground">
+              <div>User ID: {deleteTarget.userId || "Unknown"}</div>
+              <div>Image ID: {deleteTarget._id}</div>
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button
+                onClick={() => {
+                  if (!isDeleting) setDeleteTarget(null);
+                }}
+                variant="outline"
+                disabled={isDeleting}
+              >
+                Keep Image
+              </Button>
+              <Button
+                onClick={handleConfirmDelete}
+                variant="destructive"
+                disabled={isDeleting}
+                className="flex items-center gap-2"
+              >
+                {isDeleting ? (
+                  <span className="flex items-center gap-2">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    Deleting...
+                  </span>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Image
+                  </>
+                )}
               </Button>
             </div>
           </div>

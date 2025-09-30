@@ -2,7 +2,7 @@ import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, mutation } from "./_generated/server";
+import { internalAction, internalQuery, mutation } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -50,6 +50,11 @@ export const updateImageStatus = mutation({
   handler: async (ctx, args) => {
     const { imageId, status, error } = args;
 
+    const existing = await ctx.db.get(imageId);
+    if (!existing) {
+      return null;
+    }
+
     const updateData: {
       generationStatus: "pending" | "processing" | "completed" | "failed";
       generationError?: string;
@@ -71,14 +76,30 @@ export const saveGeneratedImage = mutation({
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
   },
+  returns: v.union(v.id("images"), v.null()),
   handler: async (ctx, args) => {
     const { storageId, originalImageId } = args;
+    const originalImage = await ctx.db.get(originalImageId);
+    if (!originalImage) {
+      try {
+        await ctx.storage.delete(storageId);
+      } catch (error) {
+        console.warn("[saveGeneratedImage] Failed to delete orphaned storage", {
+          storageId,
+          error,
+        });
+      }
+      return null;
+    }
 
     const generatedImageId = await ctx.db.insert("images", {
       body: storageId,
       createdAt: Date.now(),
       isGenerated: true,
       originalImageId: originalImageId,
+      userId: originalImage.userId,
+      sharingEnabled: originalImage.sharingEnabled,
+      shareExpiresAt: originalImage.shareExpiresAt,
     });
     return generatedImageId;
   },
@@ -161,7 +182,15 @@ export const generateImage = internalAction({
       // Get the URL from storage ID
       const baseImageUrl = await ctx.storage.getUrl(storageId);
       if (!baseImageUrl) {
-        throw new Error("Failed to get image URL from storage");
+        console.log(
+          `[generateImage] Storage missing for originalImageId ${originalImageId}; skipping generation.`
+        );
+        await ctx.runMutation(api.generate.updateImageStatus, {
+          imageId: originalImageId,
+          status: "failed",
+          error: "Original image no longer available",
+        });
+        return null;
       }
 
       // Load the source image and encode as base64 for inlineData
@@ -283,6 +312,25 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
           error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
+        
+        // Attempt to refund credits for the failed generation
+        try {
+          const originalImage = await ctx.runQuery(internal.generate.getImageById, { 
+            imageId: originalImageId 
+          });
+          if (originalImage?.userId) {
+            const refundResult = await ctx.runMutation(api.users.refundCreditsForFailedGeneration, {
+              userId: originalImage.userId,
+              imageId: originalImageId,
+              reason: errorMessage,
+            });
+            if (refundResult.refunded) {
+              console.log(`[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`);
+            }
+          }
+        } catch (refundError) {
+          console.error(`[generateImage] Failed to refund credits:`, refundError);
+        }
       } catch (updateError) {
         console.error(
           `[generateImage] CRITICAL: Failed to update image status to failed:`,
@@ -317,5 +365,27 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
     }
 
     return null;
+  },
+});
+
+/**
+ * Internal query to get image by ID (for refund functionality)
+ */
+export const getImageById = internalQuery({
+  args: { imageId: v.id("images") },
+  returns: v.union(
+    v.object({
+      _id: v.id("images"),
+      userId: v.optional(v.string()),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { imageId }) => {
+    const image = await ctx.db.get(imageId);
+    if (!image) return null;
+    return {
+      _id: image._id,
+      userId: image.userId,
+    };
   },
 });
