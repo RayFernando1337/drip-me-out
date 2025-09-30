@@ -150,7 +150,7 @@ export default function ImageModal({
 
   const handleTwitterShare = () => {
     const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
-    const text = "Check out my AI-generated diamond chain photo! 💎⛓️";
+    const text = "Check out my AI-generated anime transformation! 🎨✨";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");
   };
@@ -182,8 +182,8 @@ export default function ImageModal({
     if (navigator.share) {
       try {
         await navigator.share({
-          title: "My Dripped Out Photo",
-          text: "Check out my AI-generated diamond chain!",
+          title: "My Anime Transformation",
+          text: "Check out my anime transformation!",
           url: shareUrl,
         });
       } catch {

@@ -5,13 +5,14 @@ import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { SignInButton, UserButton } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { Camera, Upload, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import CreditBalance from "@/components/CreditBalance";
 import CreditPurchaseModal from "@/components/CreditPurchaseModal";
+import HeroGalleryDemo from "@/components/HeroGalleryDemo";
 
 export default function Home() {
   return (
@@ -22,7 +23,7 @@ export default function Home() {
       <Unauthenticated>
         <div className="flex flex-col w-full min-h-screen">
           {/* Header for unauthenticated users */}
-          <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
+          <header className="sticky top-0 z-50 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
               <p className="text-sm text-muted-foreground mt-0.5">
@@ -33,31 +34,16 @@ export default function Home() {
           </header>
 
           {/* Main content for unauthenticated users */}
-          <main className="flex-1 flex flex-col items-center justify-center gap-12 p-6 text-center">
-            <div className="space-y-8 max-w-3xl">
-              <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-br from-purple-400 via-blue-500 to-indigo-600 flex items-center justify-center shadow-lg breathe">
-                <Upload className="w-10 h-10 text-white" />
-              </div>
-              <div className="space-y-6">
-                <h2 className="text-3xl md:text-5xl font-semibold tracking-tight">
-                  Bring your photos to life
-                </h2>
-                <p className="text-muted-foreground text-lg md:text-xl leading-relaxed max-w-2xl mx-auto">
-                  Transform objects in your photos into magical 2D anime illustrations. Sign in to
-                  upload images and watch as everyday items come to life with whimsical anime charm!
-                </p>
-              </div>
-              {/* Public gallery showcase */}
-              <div className="w-full max-w-7xl">
+          <main className="flex-1">
+            {/* Hero Gallery Scroll Animation */}
+            <HeroGalleryDemo />
+
+            {/* Additional Examples Section */}
+            <section className="py-16 px-6 bg-muted/20">
+              <div className="max-w-7xl mx-auto">
                 <PublicGallery />
               </div>
-
-              <SignInButton>
-                <Button className="btn-primary px-12 py-4 text-lg font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
-                  Start Creating
-                </Button>
-              </SignInButton>
-            </div>
+            </section>
           </main>
         </div>
       </Unauthenticated>

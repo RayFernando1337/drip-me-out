@@ -17,8 +17,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Drip Me Out",
-  description: "Drip Me Out - AI-powered drippy diamond chain generator built with Convex and Next.js",
+  title: "Anime Studio - Transform Objects Into Anime Art",
+  description: "AI-powered anime illustration generator. Transform everyday objects into magical Studio Ghibli-inspired art using Next.js and Convex.",
 };
 
 export default function RootLayout({

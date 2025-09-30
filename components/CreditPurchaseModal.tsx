@@ -1,10 +1,11 @@
 "use client";
 import { api } from "@/convex/_generated/api";
-import { useAction, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import { Sparkles, CreditCard, Loader2 } from "lucide-react";
+import type { Id } from "@/convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,10 +31,17 @@ function polarBase() {
 }
 
 export default function CreditPurchaseModal({ children, open, onOpenChange }: CreditPurchaseModalProps) {
-  const createCheckout = useAction(api.payments.createCheckoutSession);
+  const initiateCheckout = useMutation(api.payments.initiateCheckout);
   const userCreditsData = useQuery(api.users.getCurrentUserCredits);
   const [loading, setLoading] = useState(false);
+  const [checkoutSessionId, setCheckoutSessionId] = useState<Id<"checkoutSessions"> | null>(null);
   const { user } = useUser();
+
+  // Poll checkout session status
+  const checkoutSession = useQuery(
+    api.payments.getCheckoutSession,
+    checkoutSessionId ? { sessionId: checkoutSessionId } : "skip"
+  );
 
   // Memoize user credits to prevent unnecessary re-renders
   const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
@@ -43,40 +51,71 @@ export default function CreditPurchaseModal({ children, open, onOpenChange }: Cr
     return user?.fullName || [user?.firstName, user?.lastName].filter(Boolean).join(" ") || undefined;
   }, [user?.fullName, user?.firstName, user?.lastName]);
 
+  // Handle checkout session completion
+  useEffect(() => {
+    if (!checkoutSession) return;
+
+    if (checkoutSession.status === "completed" && checkoutSession.clientSecret && checkoutSession.url) {
+      // Try client confirmation via Polar Customer API; fallback to hosted URL
+      const confirmCheckout = async () => {
+        try {
+          const res = await fetch(
+            `${polarBase()}/checkouts/client/${encodeURIComponent(checkoutSession.clientSecret!)}/confirm`,
+            {
+              method: "POST",
+              headers: { Accept: "application/json" },
+            }
+          );
+
+          if (!res.ok) {
+            // Some environments may block client confirm due to CORS; fallback to redirect
+            window.location.href = checkoutSession.url!;
+            return;
+          }
+
+          // Success feedback with credit expectation
+          toast.success("Payment confirmed!", {
+            description: "420 credits will appear in your account within moments. The page credit balance will update automatically.",
+            duration: 6000,
+          });
+          onOpenChange?.(false);
+          setCheckoutSessionId(null);
+        } catch (err) {
+          console.error("Checkout confirmation error:", err);
+          // Fallback to redirect on any error
+          window.location.href = checkoutSession.url!;
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      confirmCheckout();
+    } else if (checkoutSession.status === "failed") {
+      toast.error("Checkout failed", { description: checkoutSession.error || "Unknown error" });
+      setLoading(false);
+      setCheckoutSessionId(null);
+    }
+  }, [checkoutSession, onOpenChange]);
+
   const handlePurchase = async () => {
     try {
       setLoading(true);
       const successUrl = typeof window !== "undefined" ? window.location.origin : undefined;
       const embedOrigin = typeof window !== "undefined" ? window.location.origin : undefined;
-      const { clientSecret, url } = await createCheckout({ 
-        successUrl, 
-        embedOrigin, 
-        customerEmail, 
-        customerName 
+
+      // Initiate checkout - this is fast and returns immediately
+      const sessionId = await initiateCheckout({
+        successUrl,
+        embedOrigin,
+        customerEmail,
+        customerName,
       });
 
-      // Try client confirmation via Polar Customer API; fallback to hosted URL
-      const res = await fetch(`${polarBase()}/checkouts/client/${encodeURIComponent(clientSecret)}/confirm`, {
-        method: "POST",
-        headers: { Accept: "application/json" },
-      });
-
-      if (!res.ok) {
-        // Some environments may block client confirm due to CORS; fallback to redirect
-        window.location.href = url;
-        return;
-      }
-
-      // Success feedback with credit expectation
-      toast.success("Payment confirmed!", { 
-        description: "420 credits will appear in your account within moments. The page credit balance will update automatically.",
-        duration: 6000,
-      });
-      onOpenChange?.(false);
+      // Set session ID to start polling
+      setCheckoutSessionId(sessionId);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err || "");
       toast.error("Checkout failed", { description: msg });
-    } finally {
       setLoading(false);
     }
   };

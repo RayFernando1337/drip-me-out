@@ -4,7 +4,7 @@ This is the canonical entrypoint for AI coding agents (e.g., Amp) working in thi
 
 ## Project Overview
 
-Drip Me Out is an AI-powered image transformation app that adds diamond chains to photos using Google's Gemini 2.5 Flash model.
+Anime Studio is an AI-powered image transformation app that transforms everyday objects into magical anime illustrations using Google's Gemini 2.5 Flash model.
 
 - Frontend: Next.js 15 (App Router), TypeScript, Tailwind CSS v4
 - UI: shadcn/ui (Radix UI based)

@@ -1,4 +1,4 @@
-export { createCheckoutSession } from "./payments/createCheckoutSession";
+export { initiateCheckout, getCheckoutSession } from "./payments/checkoutSessionHelpers";
 
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";

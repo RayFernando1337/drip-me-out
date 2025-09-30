@@ -1,6 +1,6 @@
-# 💎 Drip Me Out
+# 🎨 Anime Studio
 
-An AI-powered image transformation app that adds diamond chains to your photos using cutting-edge machine learning and real-time backend processing. Built with Next.js and powered by Convex's revolutionary backend-as-a-service platform.
+An AI-powered image transformation app that transforms everyday objects into magical anime illustrations using cutting-edge machine learning and real-time backend processing. Built with Next.js and powered by Convex's revolutionary backend-as-a-service platform.
 
 ## Agent Guides
 
@@ -14,7 +14,7 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 ## ✨ Features
 
 - **📸 Dual Input Methods**: Upload images or capture live photos with your webcam
-- **🤖 AI-Powered Enhancement**: Uses Google's Gemini 2.5 Flash model for realistic diamond chain additions
+- **🤖 AI-Powered Transformation**: Uses Google's Gemini 2.5 Flash model to transform objects into Studio Ghibli-inspired anime art
 - **⚡ Real-Time Processing**: See generation status updates in real-time with Convex's reactive queries
 - **🎨 Modern UI**: Built with shadcn/ui components and Tailwind CSS for a polished experience
 - **📱 Responsive Design**: Works seamlessly on desktop and mobile devices
@@ -38,7 +38,7 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 - **Convex Actions** - Server-side functions with proper isolation
 
 ### AI Integration
-- **Google Gemini 2.5 Flash** - Latest multimodal AI model for image editing
+- **Google Gemini 2.5 Flash** - Latest multimodal AI model for image transformation
 - **Base64 Image Processing** - Efficient image data handling
 
 ## 🏗️ Architecture Highlights
@@ -87,7 +87,7 @@ Monitor AI generation progress with live status updates that automatically sync 
 1. **Clone the repository**
 ```bash
 git clone <your-repo-url>
-cd drip-me-out
+cd anime-studio
 ```
 
 2. **Install dependencies**
@@ -118,9 +118,9 @@ Open [http://localhost:3000](http://localhost:3000) to see your app!
 ## 🎯 How It Works
 
 1. **Upload or Capture**: Users can either upload an existing image or capture a live photo
-2. **AI Processing**: Images are sent to Convex Storage, then scheduled for AI enhancement using Gemini 2.5 Flash
+2. **AI Processing**: Images are sent to Convex Storage, then scheduled for AI transformation using Gemini 2.5 Flash
 3. **Real-Time Updates**: Users see live status updates as their images are processed
-4. **Instant Results**: Transformed images with diamond chains appear automatically once processing completes
+4. **Instant Results**: Transformed anime illustrations appear automatically once processing completes
 
 ## 🏆 Why Convex?
 
@@ -136,7 +136,7 @@ This app showcases Convex's most powerful features:
 ## 📁 Project Structure
 
 ```
-drip-me-out/
+anime-studio/
 ├── app/                    # Next.js App Router
 │   ├── layout.tsx         # Root layout
 │   ├── page.tsx          # Main application page
@@ -145,11 +145,11 @@ drip-me-out/
 │   ├── ui/               # shadcn/ui components
 │   ├── Webcam.tsx        # Camera capture component
 │   ├── ImagePreview.tsx  # Image gallery component
-│   └── ConvexShowcase.tsx # Convex feature demonstration
+│   └── HeroGalleryDemo.tsx # Landing page hero animation
 ├── convex/               # Convex backend
 │   ├── schema.ts         # Database schema
 │   ├── images.ts         # Image CRUD operations
-│   ├── generate.ts       # AI image generation logic
+│   ├── generate.ts       # AI image transformation logic
 │   └── https.ts          # HTTP utilities
 └── lib/                  # Utility functions
 ```

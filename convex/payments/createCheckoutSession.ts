@@ -1,52 +1,81 @@
 "use node";
 
-import { action } from "../_generated/server";
+import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
-import { requireIdentity } from "../lib/auth";
 import { Polar } from "@polar-sh/sdk";
+import { internal } from "../_generated/api";
 
 function polarServer(): "sandbox" | "production" {
   const env = (process.env.POLAR_ENV || "sandbox").toLowerCase();
   return env === "production" ? "production" : "sandbox";
 }
 
-export const createCheckoutSession = action({
+// Internal action: processes Polar API call in background
+export const processCheckout = internalAction({
   args: {
+    sessionId: v.id("checkoutSessions"),
     successUrl: v.optional(v.string()),
     embedOrigin: v.optional(v.string()),
     customerEmail: v.optional(v.string()),
     customerName: v.optional(v.string()),
-    // future: quantity support; v1 will sell a single credit pack per checkout
   },
-  returns: v.object({ clientSecret: v.string(), checkoutId: v.string(), url: v.string() }),
+  returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await requireIdentity(ctx);
     const token = process.env.POLAR_ACCESS_TOKEN;
     const productId = process.env.POLAR_PRODUCT_ID;
+
+    // Get session to verify it exists and get userId
+    const session = await ctx.runQuery(internal.payments.checkoutSessionHelpers.getSessionInternal, {
+      sessionId: args.sessionId,
+    });
+
+    if (!session) {
+      console.error("[processCheckout] Session not found:", args.sessionId);
+      return null;
+    }
+
+    if (session.status !== "pending") {
+      console.warn("[processCheckout] Session already processed:", args.sessionId);
+      return null;
+    }
+
     if (!token || !productId) {
-      throw new Error("POLAR configuration missing: POLAR_ACCESS_TOKEN and POLAR_PRODUCT_ID are required");
+      await ctx.runMutation(internal.payments.checkoutSessionHelpers.updateCheckoutSession, {
+        sessionId: args.sessionId,
+        status: "failed",
+        error: "POLAR configuration missing: POLAR_ACCESS_TOKEN and POLAR_PRODUCT_ID are required",
+      });
+      return null;
     }
 
     const polar = new Polar({ accessToken: token, server: polarServer() });
     try {
       const checkout = await polar.checkouts.create({
         products: [productId],
-        externalCustomerId: identity.subject,
+        externalCustomerId: session.userId,
         successUrl: args.successUrl,
         embedOrigin: args.embedOrigin,
         customerEmail: args.customerEmail,
         customerName: args.customerName,
-        metadata: { userId: identity.subject, app: "drip-me-out" },
+        metadata: { userId: session.userId, app: "drip-me-out" },
       });
 
-      return {
+      // Update session with success
+      await ctx.runMutation(internal.payments.checkoutSessionHelpers.updateCheckoutSession, {
+        sessionId: args.sessionId,
+        status: "completed",
         clientSecret: checkout.clientSecret,
         checkoutId: checkout.id,
         url: checkout.url,
-      };
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
-      throw new Error(`Polar checkout creation failed: ${message}`);
+      await ctx.runMutation(internal.payments.checkoutSessionHelpers.updateCheckoutSession, {
+        sessionId: args.sessionId,
+        status: "failed",
+        error: `Polar checkout creation failed: ${message}`,
+      });
     }
+    return null;
   },
 });

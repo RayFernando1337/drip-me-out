@@ -14,24 +14,24 @@ export async function generateMetadata({ params }: { params: Promise<{ imageId: 
 
   if (!image) {
     return {
-      title: "Image Not Found - Drip Me Out",
+      title: "Image Not Found - Anime Studio",
       description: "This image is no longer available.",
     };
   }
 
   return {
-    title: "Check Out My Dripped Out Photo!",
-    description: "I just got iced out with AI-generated diamond chains. Create your own!",
+    title: "Check Out My Anime Transformation!",
+    description: "I transformed an object into anime art with AI. Create yours!",
     openGraph: {
-      title: "Check Out My Dripped Out Photo!",
-      description: "I just got iced out with AI-generated diamond chains. Create your own!",
+      title: "Check Out My Anime Transformation!",
+      description: "I transformed an object into anime art with AI. Create yours!",
       images: [{ url: image.url }],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
-      title: "Check Out My Dripped Out Photo!",
-      description: "I just got iced out with AI-generated diamond chains.",
+      title: "Check Out My Anime Transformation!",
+      description: "I transformed an object into anime art with AI.",
       images: [image.url],
     },
   };

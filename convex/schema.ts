@@ -87,4 +87,22 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.string(), // admin userId
   }),
+
+  // Checkout sessions for async Polar checkout creation
+  checkoutSessions: defineTable({
+    userId: v.string(), // Clerk subject
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    clientSecret: v.optional(v.string()), // Polar client secret when completed
+    url: v.optional(v.string()), // Polar hosted checkout URL when completed
+    checkoutId: v.optional(v.string()), // Polar checkout ID when completed
+    error: v.optional(v.string()), // Error message if failed
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()), // When action finished (success or fail)
+  })
+    .index("by_userId", ["userId"])
+    .index("by_status", ["status"]),
 });
