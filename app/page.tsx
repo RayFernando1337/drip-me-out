@@ -1,6 +1,5 @@
 "use client";
 import ImagePreview from "@/components/ImagePreview";
-import PublicGallery from "@/components/PublicGallery";
 import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
@@ -37,13 +36,6 @@ export default function Home() {
           <main className="flex-1">
             {/* Hero Gallery Scroll Animation */}
             <HeroGalleryDemo />
-
-            {/* Additional Examples Section */}
-            <section className="py-16 px-6 bg-muted/20">
-              <div className="max-w-7xl mx-auto">
-                <PublicGallery />
-              </div>
-            </section>
           </main>
         </div>
       </Unauthenticated>

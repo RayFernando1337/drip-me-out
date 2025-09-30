@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { SignInButton } from "@clerk/nextjs";
-import { useMemo } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { ImageWithFallback } from "./ui/ImageWithFallback";
 
 // Curated fallback images for empty state (anime/transformation themed)
@@ -17,16 +17,28 @@ const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1633218388467-539651dcf81a?q=80&w=2000&auto=format&fit=crop",
 ];
 
+// Fisher-Yates shuffle algorithm
+function shuffleArray<T>(array: T[]): T[] {
+  const shuffled = [...array];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
 export default function HeroGalleryDemo() {
-  // Fetch actual featured images from Convex (first 5 only)
+  // Fetch MORE featured images from Convex (up to 20 for cycling)
   const featuredResult = useQuery(api.images.getPublicGallery, {
-    paginationOpts: { numItems: 5, cursor: null },
+    paginationOpts: { numItems: 20, cursor: null },
   });
 
-  // Use featured images or fallback to curated stock images
-  const images = useMemo(() => {
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Convert featured images to normalized format
+  const allFeaturedImages = useMemo(() => {
     if (featuredResult?.page && featuredResult.page.length > 0) {
-      return featuredResult.page.slice(0, 5).map((img) => ({
+      return featuredResult.page.map((img) => ({
         url: img.url,
         id: img._id,
         isFeatured: true,
@@ -39,13 +51,50 @@ export default function HeroGalleryDemo() {
     }));
   }, [featuredResult]);
 
+  // Shuffle images once on mount for randomization
+  const shuffledImages = useMemo(() => {
+    return shuffleArray(allFeaturedImages);
+  }, [allFeaturedImages]);
+
+  // Select 5 images to display based on current index
+  const images = useMemo(() => {
+    if (shuffledImages.length <= 5) {
+      return shuffledImages;
+    }
+    
+    // Cycle through images in groups of 5
+    const startIdx = currentIndex % shuffledImages.length;
+    const selected = [];
+    
+    for (let i = 0; i < 5; i++) {
+      const idx = (startIdx + i) % shuffledImages.length;
+      selected.push(shuffledImages[idx]);
+    }
+    
+    return selected;
+  }, [shuffledImages, currentIndex]);
+
+  // Auto-rotate through images every 10 seconds
+  useEffect(() => {
+    if (shuffledImages.length <= 5) return; // Don't rotate if we have 5 or fewer
+    
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 5) % shuffledImages.length);
+    }, 10000); // Rotate every 10 seconds
+    
+    return () => clearInterval(interval);
+  }, [shuffledImages.length]);
+
   return (
     <ContainerScroll className="h-[350vh] bg-gradient-to-b from-background via-background to-muted/20">
       <BentoGrid className="sticky left-0 top-0 z-0 h-screen w-full p-4">
-        {images.map((image) => (
+        {images.map((image, index) => (
           <BentoCell
-            key={image.id}
+            key={`${image.id}-${currentIndex}-${index}`}
             className="overflow-hidden rounded-xl shadow-xl"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
           >
             <ImageWithFallback
               src={image.url}
