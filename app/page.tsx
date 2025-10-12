@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
-import { UserButton } from "@clerk/nextjs";
+import { SignInButton, UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
 import { Camera, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -29,7 +29,11 @@ export default function Home() {
                 Transform objects into anime illustrations
               </p>
             </div>
-            <div className="text-sm text-gray-300">Sign in to start</div>
+            <SignInButton mode="modal">
+              <button className="text-sm text-gray-300 hover:text-white transition-colors px-4 py-2 rounded-lg hover:bg-white/10">
+                Sign in to start
+              </button>
+            </SignInButton>
           </header>
 
           {/* Main content for unauthenticated users */}
