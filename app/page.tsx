@@ -1,4 +1,7 @@
 "use client";
+import CreditBalance from "@/components/CreditBalance";
+import CreditPurchaseModal from "@/components/CreditPurchaseModal";
+import HeroGalleryDemo from "@/components/HeroGalleryDemo";
 import ImagePreview from "@/components/ImagePreview";
 import { Button } from "@/components/ui/button";
 import Webcam from "@/components/Webcam";
@@ -6,12 +9,9 @@ import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { UserButton } from "@clerk/nextjs";
 import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
-import { Camera, Upload, Sparkles } from "lucide-react";
+import { Camera, Sparkles, Upload } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import CreditBalance from "@/components/CreditBalance";
-import CreditPurchaseModal from "@/components/CreditPurchaseModal";
-import HeroGalleryDemo from "@/components/HeroGalleryDemo";
 
 export default function Home() {
   return (
@@ -21,15 +21,15 @@ export default function Home() {
       </Authenticated>
       <Unauthenticated>
         <div className="flex flex-col w-full min-h-screen">
-          {/* Header for unauthenticated users */}
-          <header className="sticky top-0 z-50 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
+          {/* Header for unauthenticated users - Dark theme */}
+          <header className="sticky top-0 z-50 flex items-center justify-between w-full px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
-              <p className="text-sm text-muted-foreground mt-0.5">
+              <h1 className="text-2xl font-bold text-white">Anime Studio</h1>
+              <p className="text-sm text-gray-300 mt-0.5">
                 Transform objects into anime illustrations
               </p>
             </div>
-            <div className="text-sm text-muted-foreground">Sign in to start</div>
+            <div className="text-sm text-gray-300">Sign in to start</div>
           </header>
 
           {/* Main content for unauthenticated users */}
@@ -48,7 +48,7 @@ function Content() {
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
   const userCreditsData = useQuery(api.users.getCurrentUserCredits);
-  
+
   // Memoize credit-derived values to avoid unnecessary re-renders
   const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
   const canUpload = useMemo(() => userCredits && userCredits.credits > 0, [userCredits]);
@@ -88,7 +88,10 @@ function Content() {
   const galleryResult = useMemo(() => galleryResultData, [galleryResultData]);
   const totalImagesCount = useMemo(() => totalImagesCountData || 0, [totalImagesCountData]);
   const failedImages = useMemo(() => failedImagesData || [], [failedImagesData]);
-  const hasActiveGenerations = useMemo(() => hasActiveGenerationsData || false, [hasActiveGenerationsData]);
+  const hasActiveGenerations = useMemo(
+    () => hasActiveGenerationsData || false,
+    [hasActiveGenerationsData]
+  );
 
   // Handle pagination results with proper reactivity
   useEffect(() => {
@@ -255,7 +258,7 @@ function Content() {
             // Show credit usage feedback with updated balance
             const remainingCredits = Math.max(0, (userCredits?.credits || 0) - 1);
             toast.success("Transformation started", {
-              description: `Using 1 credit. ${remainingCredits} credit${remainingCredits !== 1 ? 's' : ''} remaining.`,
+              description: `Using 1 credit. ${remainingCredits} credit${remainingCredits !== 1 ? "s" : ""} remaining.`,
               duration: 4000, // Show longer to let user see the updated balance
             });
 
@@ -283,11 +286,11 @@ function Content() {
         console.error("Upload failed:", error);
         const msg = toUserMessage(error);
         const errorMsg = error instanceof Error ? error.message : String(error || "");
-        
+
         // If it's an insufficient credits error, show the purchase modal
         if (errorMsg.startsWith("INSUFFICIENT_CREDITS:")) {
           setShowPurchaseModal(true);
-          toast.error("No Credits Available", { 
+          toast.error("No Credits Available", {
             description: "You need credits to generate images. Each transformation uses 1 credit.",
             duration: 5000,
           });
@@ -301,7 +304,13 @@ function Content() {
         setIsUploading(false);
       }
     },
-    [generateUploadUrl, uploadAndScheduleGeneration, toUserMessage, resetPagination, userCredits?.credits]
+    [
+      generateUploadUrl,
+      uploadAndScheduleGeneration,
+      toUserMessage,
+      resetPagination,
+      userCredits?.credits,
+    ]
   );
 
   const handleImageCapture = async (imageData: string) => {
@@ -422,8 +431,8 @@ function Content() {
               onClick={() => setShowDesktopCamera(!showDesktopCamera)}
               disabled={!canUpload}
               className={`flex items-center gap-2 ${
-                !canUpload 
-                  ? "text-muted-foreground/50" 
+                !canUpload
+                  ? "text-muted-foreground/50"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -472,8 +481,9 @@ function Content() {
                     ${
                       isDragOver && canUpload
                         ? "border-primary bg-gradient-to-br from-primary/10 to-purple-500/10 scale-[1.01] shadow-xl"
-                        : canUpload ? "border-border/40 hover:border-primary/40 hover:shadow-lg cursor-pointer" 
-                        : "border-border/30"
+                        : canUpload
+                          ? "border-border/40 hover:border-primary/40 hover:shadow-lg cursor-pointer"
+                          : "border-border/30"
                     }
                     ${isPreparing || isUploading ? "opacity-50 cursor-not-allowed" : ""}
                   `}
@@ -502,8 +512,8 @@ function Content() {
                             {isLoadingCredits ? "Loading..." : "No Credits Available"}
                           </p>
                           <p className="text-muted-foreground">
-                            {isLoadingCredits 
-                              ? "Checking your account..." 
+                            {isLoadingCredits
+                              ? "Checking your account..."
                               : "You need credits to generate images. Each transformation uses 1 credit."}
                           </p>
                         </div>
@@ -557,8 +567,8 @@ function Content() {
                     onClick={() => setShowMobileCamera(!showMobileCamera)}
                     disabled={!canUpload}
                     className={`flex items-center gap-2 transition-colors py-2 px-4 rounded-lg ${
-                      !canUpload 
-                        ? "text-muted-foreground/50 cursor-not-allowed" 
+                      !canUpload
+                        ? "text-muted-foreground/50 cursor-not-allowed"
                         : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                     }`}
                   >
@@ -741,10 +751,7 @@ function Content() {
       )}
 
       {/* Controlled Purchase Modal for insufficient credits */}
-      <CreditPurchaseModal
-        open={showPurchaseModal}
-        onOpenChange={setShowPurchaseModal}
-      >
+      <CreditPurchaseModal open={showPurchaseModal} onOpenChange={setShowPurchaseModal}>
         <div />
       </CreditPurchaseModal>
     </div>

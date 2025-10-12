@@ -1,14 +1,15 @@
 "use client";
 
-import { BentoCell, BentoGrid, ContainerScale, ContainerScroll } from "@/components/ui/hero-gallery-scroll-animation";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
-import { useQuery } from "convex/react";
 import { SignInButton } from "@clerk/nextjs";
-import { useMemo, useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useMemo, useState } from "react";
+import { AuraBackground } from "./ui/AuraBackground";
 import { ImageWithFallback } from "./ui/ImageWithFallback";
 
-// Curated fallback images for empty state (anime/transformation themed)
 const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1578632767115-351597cf2477?q=80&w=2000&auto=format&fit=crop",
   "https://images.unsplash.com/photo-1613376023733-0a73315d9b06?q=80&w=2000&auto=format&fit=crop",
@@ -17,26 +18,16 @@ const FALLBACK_IMAGES = [
   "https://images.unsplash.com/photo-1633218388467-539651dcf81a?q=80&w=2000&auto=format&fit=crop",
 ];
 
-// Fisher-Yates shuffle algorithm
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
-
 export default function HeroGalleryDemo() {
-  // Fetch MORE featured images from Convex (up to 20 for cycling)
+  // Fetch featured images with pagination (12 images)
   const featuredResult = useQuery(api.images.getPublicGallery, {
-    paginationOpts: { numItems: 20, cursor: null },
+    paginationOpts: { numItems: 12, cursor: null },
   });
 
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  // Convert featured images to normalized format
-  const allFeaturedImages = useMemo(() => {
+  // Convert featured images to normalized format - SHOW ALL
+  const allImages = useMemo(() => {
     if (featuredResult?.page && featuredResult.page.length > 0) {
       return featuredResult.page.map((img) => ({
         url: img.url,
@@ -51,79 +42,140 @@ export default function HeroGalleryDemo() {
     }));
   }, [featuredResult]);
 
-  // Shuffle images once on mount for randomization
-  const shuffledImages = useMemo(() => {
-    return shuffleArray(allFeaturedImages);
-  }, [allFeaturedImages]);
+  const handleNext = () => {
+    setSelectedIndex((prev) => (prev + 1) % allImages.length);
+  };
 
-  // Select 5 images to display based on current index
-  const images = useMemo(() => {
-    if (shuffledImages.length <= 5) {
-      return shuffledImages;
-    }
-    
-    // Cycle through images in groups of 5
-    const startIdx = currentIndex % shuffledImages.length;
-    const selected = [];
-    
-    for (let i = 0; i < 5; i++) {
-      const idx = (startIdx + i) % shuffledImages.length;
-      selected.push(shuffledImages[idx]);
-    }
-    
-    return selected;
-  }, [shuffledImages, currentIndex]);
+  const handlePrev = () => {
+    setSelectedIndex((prev) => (prev - 1 + allImages.length) % allImages.length);
+  };
 
-  // Auto-rotate through images every 10 seconds
-  useEffect(() => {
-    if (shuffledImages.length <= 5) return; // Don't rotate if we have 5 or fewer
-    
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 5) % shuffledImages.length);
-    }, 10000); // Rotate every 10 seconds
-    
-    return () => clearInterval(interval);
-  }, [shuffledImages.length]);
+  const handleSelectImage = (index: number) => {
+    setSelectedIndex(index);
+  };
 
   return (
-    <ContainerScroll className="h-[350vh] bg-gradient-to-b from-background via-background to-muted/20">
-      <BentoGrid className="sticky left-0 top-0 z-0 h-screen w-full p-4">
-        {images.map((image, index) => (
-          <BentoCell
-            key={`${image.id}-${currentIndex}-${index}`}
-            className="overflow-hidden rounded-xl shadow-xl"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, ease: "easeInOut" }}
-          >
-            <ImageWithFallback
-              src={image.url}
-              alt="Anime transformation example"
-              fill
-              className="size-full object-cover object-center"
-              unoptimized={true}
-              sizes="(max-width: 768px) 100vw, 50vw"
-            />
-          </BentoCell>
-        ))}
-      </BentoGrid>
+    <div className="relative min-h-screen w-full">
+      {/* Fixed Aura Background */}
+      <AuraBackground />
 
-      <ContainerScale className="relative z-10 text-center px-6">
-        <h1 className="max-w-2xl text-4xl md:text-6xl font-bold tracking-tighter text-foreground">
-          Transform Objects Into Anime Art
-        </h1>
-        <p className="my-6 max-w-xl text-base md:text-lg text-muted-foreground leading-relaxed">
-          Watch everyday items come alive with Studio Ghibli-inspired magic. 
-          Our AI transforms ordinary objects into whimsical anime illustrations.
-        </p>
-        <div className="flex items-center justify-center gap-4">
-          <SignInButton>
-            <Button size="lg" className="px-8 py-6 text-base font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200">
-              Start Creating
-            </Button>
-          </SignInButton>
+      {/* Two-Column Hero Layout */}
+      <div className="container mx-auto px-6 py-12 min-h-screen flex items-center">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 w-full items-center">
+          {/* Left Column: Text + CTA */}
+          <div className="space-y-8">
+            <div className="space-y-4">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight text-white drop-shadow-[0_2px_10px_rgba(255,255,255,0.3)]">
+                Transform Objects Into Anime Art
+              </h1>
+              <p className="text-lg md:text-xl text-gray-200 leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
+                Watch everyday items come alive with Studio Ghibli-inspired magic. Our AI transforms
+                ordinary objects into whimsical anime illustrations.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <SignInButton>
+                <Button
+                  size="lg"
+                  className="px-8 py-6 text-base font-medium rounded-2xl shadow-lg hover:shadow-xl transition-all duration-200 bg-white text-black hover:bg-gray-100"
+                >
+                  Start Creating
+                </Button>
+              </SignInButton>
+            </div>
+
+            {/* Optional: Feature highlights */}
+            <div className="flex items-center gap-6 pt-4 text-sm text-gray-300">
+              <div className="flex items-center gap-2">
+                <span>✨</span>
+                <span>AI-Powered</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>⚡</span>
+                <span>Instant Results</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span>🎨</span>
+                <span>Studio Ghibli Style</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Hero Image + Gallery Dock */}
+          <div className="space-y-6">
+            {/* Large Hero Image */}
+            <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl bg-muted/20">
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={selectedIndex}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.05 }}
+                  transition={{ duration: 0.3, ease: "easeInOut" }}
+                  className="relative w-full h-full"
+                >
+                  <ImageWithFallback
+                    src={allImages[selectedIndex].url}
+                    alt="Featured anime transformation"
+                    fill
+                    className="object-cover"
+                    unoptimized={true}
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    priority={true}
+                  />
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Navigation Arrows */}
+              <button
+                onClick={handlePrev}
+                className="absolute left-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+                aria-label="Previous image"
+              >
+                <ChevronLeft className="w-6 h-6 text-black" />
+              </button>
+              <button
+                onClick={handleNext}
+                className="absolute right-4 top-1/2 -translate-y-1/2 z-10 bg-white/90 backdrop-blur-sm hover:bg-white rounded-full p-3 shadow-lg transition-all duration-200 hover:scale-110"
+                aria-label="Next image"
+              >
+                <ChevronRight className="w-6 h-6 text-black" />
+              </button>
+            </div>
+
+            {/* Gallery Dock: Scrollable thumbnails */}
+            <div className="relative">
+              <div className="flex gap-3 overflow-x-auto pb-2 px-2 scrollbar-hide">
+                {allImages.map((image, index) => (
+                  <button
+                    key={image.id}
+                    onClick={() => handleSelectImage(index)}
+                    className={`
+                      relative flex-shrink-0 w-20 h-20 rounded-xl overflow-hidden 
+                      transition-all duration-200 hover:scale-105
+                      ${
+                        selectedIndex === index
+                          ? "ring-4 ring-primary shadow-lg scale-105"
+                          : "ring-2 ring-border/30 opacity-70 hover:opacity-100"
+                      }
+                    `}
+                  >
+                    <ImageWithFallback
+                      src={image.url}
+                      alt={`Thumbnail ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized={true}
+                      sizes="80px"
+                    />
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
-      </ContainerScale>
-    </ContainerScroll>
+      </div>
+    </div>
   );
 }
