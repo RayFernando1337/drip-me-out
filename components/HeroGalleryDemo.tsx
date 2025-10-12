@@ -6,7 +6,7 @@ import { SignInButton } from "@clerk/nextjs";
 import { useQuery } from "convex/react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AuraBackground } from "./ui/AuraBackground";
 import { ImageWithFallback } from "./ui/ImageWithFallback";
 
@@ -58,6 +58,14 @@ export default function HeroGalleryDemo() {
   const handleSelectImage = (index: number) => {
     setSelectedIndex(index);
   };
+
+  // Reset selectedIndex when allImages changes (reactive updates from Convex)
+  useEffect(() => {
+    // If selected index is out of bounds, reset to 0
+    if (allImages.length > 0 && selectedIndex >= allImages.length) {
+      setSelectedIndex(0);
+    }
+  }, [allImages.length, selectedIndex]);
 
   // Show loading state while images are being fetched
   const isLoading = featuredResult === undefined || allImages.length === 0;
