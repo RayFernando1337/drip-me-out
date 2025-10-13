@@ -4,6 +4,7 @@ import CreditPurchaseModal from "@/components/CreditPurchaseModal";
 import HeroGalleryDemo from "@/components/HeroGalleryDemo";
 import ImagePreview from "@/components/ImagePreview";
 import { Button } from "@/components/ui/button";
+import { UserInitializer } from "@/components/UserInitializer";
 import Webcam from "@/components/Webcam";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -52,6 +53,8 @@ function Content() {
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
   const retryOriginalMutation = useMutation(api.generate.retryOriginal);
   const userCreditsData = useQuery(api.users.getCurrentUserCredits);
+
+  // Initialize user record on first sign-in to grant initial credits
 
   // Memoize credit-derived values to avoid unnecessary re-renders
   const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
@@ -400,6 +403,9 @@ function Content() {
 
   return (
     <div className="flex flex-col w-full min-h-screen">
+      {/* Initialize user record on mount to grant initial credits */}
+      <UserInitializer />
+      
       {/* Sticky Header with Auth */}
       <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-6">
