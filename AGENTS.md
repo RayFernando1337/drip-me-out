@@ -4,7 +4,7 @@ This is the canonical entrypoint for AI coding agents (e.g., Amp) working in thi
 
 ## Project Overview
 
-Anime Studio is an AI-powered image transformation app that transforms everyday objects into magical anime illustrations using Google's Gemini 2.5 Flash model.
+Anime Leak is an AI-powered image transformation app where anime leaks into reality, transforming everyday objects into magical anime illustrations using Google's Gemini 2.5 Flash model.
 
 - Frontend: Next.js 15 (App Router), TypeScript, Tailwind CSS v4
 - UI: shadcn/ui (Radix UI based)
@@ -12,6 +12,7 @@ Anime Studio is an AI-powered image transformation app that transforms everyday 
 - AI: Google Gemini 2.5 Flash
 
 Directory structure:
+
 - /app: Next.js App Router pages/layouts
 - /components: React components and UI primitives in /components/ui
 - /convex: Backend functions (queries, mutations, actions, schema)
@@ -36,6 +37,7 @@ bunx convex dashboard    # Open dashboard
 ```
 
 Environment variables:
+
 - NEXT_PUBLIC_CONVEX_URL (frontend)
 - CONVEX_DEPLOYMENT (optional, deployment URL)
 - GEMINI_API_KEY (Convex dashboard)
@@ -63,6 +65,7 @@ To keep agent context minimal, each major folder has its own AGENTS.md. Agents s
 - Planned: /documentation/features/planned/
 
 When implementing a feature:
+
 - Check the active spec and progress docs
 - Reuse patterns from completed features
 

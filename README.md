@@ -1,6 +1,6 @@
-# 🎨 Anime Studio
+# 🎨 Anime Leak
 
-An AI-powered image transformation app that transforms everyday objects into magical anime illustrations using cutting-edge machine learning and real-time backend processing. Built with Next.js and powered by Convex's revolutionary backend-as-a-service platform.
+An AI-powered image transformation app that transforms everyday objects into magical anime illustrations where anime leaks into reality. Built with Next.js and powered by Convex's revolutionary backend-as-a-service platform.
 
 ## Agent Guides
 
@@ -14,7 +14,7 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 ## ✨ Features
 
 - **📸 Dual Input Methods**: Upload images or capture live photos with your webcam
-- **🤖 AI-Powered Transformation**: Uses Google's Gemini 2.5 Flash model to transform objects into Studio Ghibli-inspired anime art
+- **🤖 AI-Powered Transformation**: Uses Google's Gemini 2.5 Flash model to transform objects with anime leaking into reality
 - **⚡ Real-Time Processing**: See generation status updates in real-time with Convex's reactive queries
 - **🎨 Modern UI**: Built with shadcn/ui components and Tailwind CSS for a polished experience
 - **📱 Responsive Design**: Works seamlessly on desktop and mobile devices
@@ -24,6 +24,7 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 ## 🚀 Tech Stack
 
 ### Frontend
+
 - **Next.js 15** - React framework with App Router
 - **TypeScript** - Type-safe development
 - **Tailwind CSS** - Utility-first styling
@@ -32,12 +33,14 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 - **Sonner** - Beautiful toast notifications
 
 ### Backend (Convex)
+
 - **Convex Database** - Real-time NoSQL database with automatic schema management
 - **Convex Storage** - Secure file upload and storage
 - **Convex Scheduler** - Background job processing for AI image generation
 - **Convex Actions** - Server-side functions with proper isolation
 
 ### AI Integration
+
 - **Google Gemini 2.5 Flash** - Latest multimodal AI model for image transformation
 - **Base64 Image Processing** - Efficient image data handling
 
@@ -46,38 +49,47 @@ Agents follow the closest-wins rule (see https://agents.md): read the nearest AG
 ### Powered by Convex's Game-Changing Features
 
 **🔥 Real-Time Reactive Queries**
+
 ```typescript
 const images = useQuery(api.images.getImages) || [];
 ```
+
 Convex's reactive queries automatically update your UI when data changes, providing instant feedback during image processing.
 
 **⚡ Background Job Scheduling**
+
 ```typescript
 await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
   storageId,
   originalImageId,
 });
 ```
+
 Process-intensive AI tasks run in the background, ensuring your app remains responsive and users never lose their work.
 
 **💾 Secure File Storage**
+
 ```typescript
 const uploadUrl = await generateUploadUrl();
 // Upload directly to Convex Storage
 const result = await fetch(uploadUrl, { method: "POST", body: file });
 ```
+
 Files are uploaded directly to Convex's secure storage with automatic URL generation and access control.
 
 **📊 Real-Time Status Updates**
+
 ```typescript
 // Track processing status in real-time
-images.some(img => img.generationStatus === 'pending' || img.generationStatus === 'processing')
+images.some((img) => img.generationStatus === "pending" || img.generationStatus === "processing");
 ```
+
 Monitor AI generation progress with live status updates that automatically sync across all connected clients.
 
 ## 🛠️ Getting Started
 
 ### Prerequisites
+
 - Node.js 18+
 - A Convex account ([sign up here](https://www.convex.dev/))
 - Google Gemini API key
@@ -85,17 +97,20 @@ Monitor AI generation progress with live status updates that automatically sync 
 ### Installation
 
 1. **Clone the repository**
+
 ```bash
 git clone <your-repo-url>
-cd anime-studio
+cd animeleak
 ```
 
 2. **Install dependencies**
+
 ```bash
 npm install
 ```
 
 3. **Set up Convex**
+
 ```bash
 npx convex dev --once
 ```
@@ -103,12 +118,14 @@ npx convex dev --once
 4. **Configure environment variables**
 
 Create a `.env.local` file:
+
 ```bash
 CONVEX_DEPLOYMENT=your-convex-deployment-url
 GEMINI_API_KEY=your-gemini-api-key
 ```
 
 5. **Run the development server**
+
 ```bash
 npm run dev
 ```
@@ -136,7 +153,7 @@ This app showcases Convex's most powerful features:
 ## 📁 Project Structure
 
 ```
-anime-studio/
+animeleak/
 ├── app/                    # Next.js App Router
 │   ├── layout.tsx         # Root layout
 │   ├── page.tsx          # Main application page
@@ -157,11 +174,13 @@ anime-studio/
 ## 🚀 Deployment
 
 ### Deploy to Convex
+
 ```bash
 npx convex deploy
 ```
 
 ### Deploy to Vercel
+
 ```bash
 npm run build
 # Deploy using Vercel CLI or connect your GitHub repo

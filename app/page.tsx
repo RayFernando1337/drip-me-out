@@ -24,7 +24,7 @@ export default function Home() {
           {/* Header for unauthenticated users - Dark theme */}
           <header className="sticky top-0 z-50 flex items-center justify-between w-full px-6 py-4 border-b border-white/10 bg-black/40 backdrop-blur-md">
             <div>
-              <h1 className="text-2xl font-bold text-white">Anime Studio</h1>
+              <h1 className="text-2xl font-bold text-white">Anime Leak</h1>
               <p className="text-sm text-gray-300 mt-0.5">
                 Transform objects into anime illustrations
               </p>
@@ -404,7 +404,7 @@ function Content() {
       <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
         <div className="flex items-center gap-6">
           <div>
-            <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
+            <h1 className="text-2xl font-bold text-foreground">Anime Leak</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
               Transform objects into anime illustrations
             </p>

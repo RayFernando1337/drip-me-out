@@ -7,11 +7,12 @@
 
 ## Executive Summary
 
-Enhance the landing page experience to better showcase the transformation capabilities of Anime Studio. Primary focus: implementing before/after image comparisons to demonstrate the AI's transformation power, along with additional marketing sections to drive conversions.
+Enhance the landing page experience to better showcase the transformation capabilities of Anime Leak. Primary focus: implementing before/after image comparisons to demonstrate the AI's transformation power, along with additional marketing sections to drive conversions.
 
 ## Problem Statement
 
 Current landing page has:
+
 - Hero scroll animation with 5 transformed images (excellent first impression)
 - PublicGallery showing more transformed images below hero
 - **Missing**: Visual proof of the transformation process (before → after)
@@ -23,30 +24,30 @@ Users need to see the **transformation journey** to understand the value proposi
 ## Architecture Overview
 
 ### Current Structure
+
 ```tsx
 <Unauthenticated>
   <Header />
   <main>
-    <HeroGalleryDemo />  // 5 transformed images with scroll animation
-    <PublicGallery />     // Grid of all featured images
+    <HeroGalleryDemo /> // 5 transformed images with scroll animation
+    <PublicGallery /> // Grid of all featured images
   </main>
 </Unauthenticated>
 ```
 
 ### Proposed Structure
+
 ```tsx
 <Unauthenticated>
   <Header />
   <main>
-    <HeroGalleryDemo />                    // Keep existing
-    
+    <HeroGalleryDemo /> // Keep existing
     {/* NEW SECTIONS */}
-    <BeforeAfterShowcase />                // Before/After comparisons
-    <FeaturesHighlight />                  // 3-column feature grid
-    <TransformationExamples />             // Curated examples by category
-    <CallToAction />                       // Final conversion push
-    
-    <PublicGallery />                      // Move to bottom or remove
+    <BeforeAfterShowcase /> // Before/After comparisons
+    <FeaturesHighlight /> // 3-column feature grid
+    <TransformationExamples /> // Curated examples by category
+    <CallToAction /> // Final conversion push
+    <PublicGallery /> // Move to bottom or remove
   </main>
 </Unauthenticated>
 ```
@@ -58,6 +59,7 @@ Users need to see the **transformation journey** to understand the value proposi
 **Component:** `/components/BeforeAfterShowcase.tsx`
 
 **Features:**
+
 - Slider-based before/after comparison (react-compare-image or custom)
 - Display 3-5 curated transformation pairs
 - Fetch from Convex: need to store original image reference with generated images
@@ -65,34 +67,37 @@ Users need to see the **transformation journey** to understand the value proposi
 - Mobile-friendly: tap to toggle or auto-animate
 
 **Data Requirements:**
+
 - Convex query to fetch images with both original + generated versions
 - Filter: only show images marked as "showcase-worthy" by admin
 - New field in schema: `isShowcaseExample: boolean`
 
 **Design Inspiration:**
+
 - Split-screen layout with draggable divider
-- Labels: "Original" | "Anime Studio Magic"
+- Labels: "Original" | "Anime Leak Magic"
 - Smooth animations on reveal
 - Auto-play slider animation on scroll into view
 
 **Example Code Structure:**
+
 ```tsx
-"use client"
-import { useQuery } from "convex/react"
-import { api } from "@/convex/_generated/api"
-import { CompareSlider } from "@/components/ui/compare-slider"
+"use client";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { CompareSlider } from "@/components/ui/compare-slider";
 
 export default function BeforeAfterShowcase() {
   const showcaseExamples = useQuery(api.images.getShowcaseExamples, {
-    limit: 5
-  })
-  
+    limit: 5,
+  });
+
   return (
     <section className="py-24 px-6">
       <div className="max-w-6xl mx-auto">
         <h2>See The Magic Happen</h2>
         <p>Everyday objects transformed into anime art</p>
-        
+
         <div className="grid md:grid-cols-2 gap-8 mt-12">
           {showcaseExamples?.map((example) => (
             <CompareSlider
@@ -106,7 +111,7 @@ export default function BeforeAfterShowcase() {
         </div>
       </div>
     </section>
-  )
+  );
 }
 ```
 
@@ -115,16 +120,19 @@ export default function BeforeAfterShowcase() {
 **Component:** `/components/FeaturesHighlight.tsx`
 
 **Content:**
+
 - 3-column grid highlighting key features
 - Icons from lucide-react
 - Benefits-focused copy
 
 **Features to Highlight:**
+
 1. **Instant Transformation** - AI-powered in seconds
-2. **Studio Ghibli Style** - Magical anime aesthetic
+2. **Anime Reality Style** - Magical anime aesthetic where anime leaks into reality
 3. **Any Object** - Works on everyday items
 
 **Design:**
+
 - Icon + Title + Description cards
 - Subtle hover animations
 - Background gradient or illustrations
@@ -134,12 +142,14 @@ export default function BeforeAfterShowcase() {
 **Component:** `/components/TransformationExamples.tsx`
 
 **Features:**
+
 - Tabbed or carousel interface
 - Categories: "Food", "Toys", "Pets", "Objects", "Nature"
 - Each category shows 3-4 best examples
 - Links to sign-in to create similar
 
 **Data:**
+
 - Admin can tag images with categories
 - New field: `category: string[]`
 - Query images by category
@@ -149,12 +159,14 @@ export default function BeforeAfterShowcase() {
 **Component:** `/components/CallToAction.tsx`
 
 **Features:**
+
 - Full-width banner section
 - Strong value proposition
 - Sign-in button (primary CTA)
 - Trust signals (user count, transformations created)
 
 **Copy Ideas:**
+
 - "Join 10,000+ creators transforming the ordinary"
 - "Your first transformation is free"
 - "No credit card required"
@@ -162,6 +174,7 @@ export default function BeforeAfterShowcase() {
 ### Phase 5: PublicGallery Optimization (Priority: LOW)
 
 **Options:**
+
 1. **Keep but minimize** - Show only 8 images with "View More" link
 2. **Remove entirely** - Rely on showcase sections above
 3. **Make it skippable** - Collapse by default with "Show More Examples"
@@ -180,8 +193,8 @@ defineTable({
   category: v.optional(v.array(v.string())),
   showcaseOrder: v.optional(v.number()), // For admin-controlled ordering
 })
-.index("by_isShowcaseExample", ["isShowcaseExample"])
-.index("by_category", ["category"])
+  .index("by_isShowcaseExample", ["isShowcaseExample"])
+  .index("by_category", ["category"]);
 ```
 
 ### New Queries
@@ -197,8 +210,8 @@ export const getShowcaseExamples = query({
     // Must have both original and generated images
     // Order by showcaseOrder or featuredAt
     // Include URLs for both original and generated
-  }
-})
+  },
+});
 
 export const getImagesByCategory = query({
   args: { category: v.string(), limit: v.number() },
@@ -206,8 +219,8 @@ export const getImagesByCategory = query({
   handler: async (ctx, args) => {
     // Query images by category
     // Return transformed versions only
-  }
-})
+  },
+});
 ```
 
 ### Admin Mutations
@@ -216,25 +229,25 @@ export const getImagesByCategory = query({
 // In convex/admin.ts
 
 export const toggleShowcaseStatus = mutation({
-  args: { 
+  args: {
     imageId: v.id("images"),
     isShowcaseExample: v.boolean(),
-    showcaseOrder: v.optional(v.number())
+    showcaseOrder: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     // Admin only: mark image as showcase example
-  }
-})
+  },
+});
 
 export const updateImageCategory = mutation({
   args: {
     imageId: v.id("images"),
-    categories: v.array(v.string())
+    categories: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     // Admin only: add/remove categories
-  }
-})
+  },
+});
 ```
 
 ## UI/UX Enhancements
@@ -242,12 +255,14 @@ export const updateImageCategory = mutation({
 ### Before/After Slider Implementation
 
 **Library Options:**
+
 1. **react-compare-image** - Simple, lightweight
 2. **Custom implementation** - More control, animation flexibility
 
 **Recommended:** Custom implementation for better animation control
 
 **Features:**
+
 - Draggable divider with snap points
 - Auto-animate on scroll into view (once)
 - Touch-friendly for mobile
@@ -256,12 +271,14 @@ export const updateImageCategory = mutation({
 ### Visual Design
 
 **Color Palette:**
+
 - Hero: Existing gradient background
 - Showcase: White/light background for contrast
 - Features: Subtle muted background
 - CTA: Bold gradient matching brand
 
 **Typography:**
+
 - Headlines: Bold, 2xl-4xl
 - Body: Comfortable reading size, max-w-2xl
 - Captions: Smaller, muted color
@@ -269,6 +286,7 @@ export const updateImageCategory = mutation({
 ## Testing & Verification
 
 ### Functional Tests
+
 - [ ] Before/After slider works on desktop (mouse drag)
 - [ ] Before/After slider works on mobile (touch)
 - [ ] Showcase images load from Convex
@@ -277,6 +295,7 @@ export const updateImageCategory = mutation({
 - [ ] All sections responsive on mobile
 
 ### Visual Tests
+
 - [ ] No layout shift during image loading
 - [ ] Smooth animations at 60fps
 - [ ] Proper spacing between sections
@@ -284,6 +303,7 @@ export const updateImageCategory = mutation({
 - [ ] Accessible contrast ratios
 
 ### Data Tests
+
 - [ ] Only showcase-marked images appear
 - [ ] Images with missing originals don't break UI
 - [ ] Empty states handled gracefully
@@ -307,17 +327,20 @@ export const updateImageCategory = mutation({
 ## Migration Strategy
 
 ### Phase 1 (MVP)
+
 1. Add schema fields (isShowcaseExample, category)
 2. Implement BeforeAfterShowcase component
 3. Create admin UI to mark showcase images
 4. Deploy to production
 
 ### Phase 2 (Enhanced)
+
 1. Add FeaturesHighlight section
 2. Implement category system
 3. Add TransformationExamples component
 
 ### Phase 3 (Polish)
+
 1. Add CallToAction section
 2. Optimize PublicGallery
 3. A/B test different layouts

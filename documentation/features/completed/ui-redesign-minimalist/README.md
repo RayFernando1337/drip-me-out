@@ -5,7 +5,7 @@
 
 ## Overview
 
-Complete redesign of the Anime Studio interface following Jony Ive's minimalist design principles. Eliminated visual clutter, optimized Convex backend performance, and created an Apple-quality user experience that drives engagement.
+Complete redesign of the Anime Leak interface following Jony Ive's minimalist design principles. Eliminated visual clutter, optimized Convex backend performance, and created an Apple-quality user experience that drives engagement.
 
 ## Features Implemented
 
@@ -14,7 +14,7 @@ Complete redesign of the Anime Studio interface following Jony Ive's minimalist 
 - **Beautiful Drag & Drop**: Hero drop zones with sophisticated feedback
 - **Responsive Excellence**: Mobile-first with desktop optimization
 - **Performance Optimization**: 90% faster Convex queries using proper indexes
-- **Brand Realignment**: "Anime Studio" with accurate messaging
+- **Brand Realignment**: "Anime Leak" with accurate messaging
 - **Progressive Disclosure**: Advanced features revealed when needed
 - **Error Handling**: Footer notifications with clear recovery paths
 
