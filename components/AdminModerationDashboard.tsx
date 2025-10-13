@@ -21,10 +21,12 @@ export default function AdminModerationDashboard() {
   const disableImage = useMutation(api.admin.disableFeaturedImage);
   const enableImage = useMutation(api.admin.enableFeaturedImage);
   const deleteImage = useMutation(api.images.deleteImage);
+  const normalizeFeatured = useMutation(api.admin.normalizeFeaturedFlags);
   const [disableReason, setDisableReason] = useState("");
   const [selectedImageId, setSelectedImageId] = useState<Id<"images"> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeaturedImage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isNormalizing, setIsNormalizing] = useState(false);
 
   const handleDisableImage = async (imageId: Id<"images">) => {
     await disableImage({ imageId, reason: disableReason || "Policy violation" });
@@ -60,11 +62,12 @@ export default function AdminModerationDashboard() {
             `${result.deletedGenerated} generated version${result.deletedGenerated === 1 ? "" : "s"}`
           );
         }
-        const descriptionParts = segments.length > 0 ? `Removed ${segments.join(" and ")}.` : undefined;
+        const descriptionParts =
+          segments.length > 0 ? `Removed ${segments.join(" and ")}.` : undefined;
         toast.success("Image deleted", {
           description: result.actedAsAdmin
             ? `${descriptionParts ?? "Deletion completed."} The user can no longer access this photo.`
-            : descriptionParts ?? "Deletion completed.",
+            : (descriptionParts ?? "Deletion completed."),
         });
       }
     } catch (error) {
@@ -76,11 +79,37 @@ export default function AdminModerationDashboard() {
     }
   };
 
+  const handleNormalizeFeatured = async () => {
+    setIsNormalizing(true);
+    try {
+      const updated = await normalizeFeatured();
+      toast.success("Featured images normalized", {
+        description: `Updated ${updated} image${updated !== 1 ? "s" : ""} to be visible in public gallery.`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to normalize images";
+      toast.error(message);
+    } finally {
+      setIsNormalizing(false);
+    }
+  };
+
   return (
     <div className="space-y-8 p-6">
       <div className="text-center space-y-2">
         <h2 className="text-2xl font-semibold">Featured Images Moderation</h2>
         <p className="text-muted-foreground">Review and moderate public gallery images</p>
+        <div className="flex justify-center pt-4">
+          <Button
+            onClick={handleNormalizeFeatured}
+            disabled={isNormalizing}
+            variant="outline"
+            size="sm"
+            className="gap-2"
+          >
+            {isNormalizing ? "Normalizing..." : "Fix Public Gallery Visibility"}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -214,7 +243,8 @@ export default function AdminModerationDashboard() {
           <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full space-y-4">
             <h3 className="text-lg font-semibold text-destructive">Delete User&apos;s Image?</h3>
             <p className="text-sm text-muted-foreground">
-              This will permanently remove this user&apos;s image and all generated versions. This action cannot be undone.
+              This will permanently remove this user&apos;s image and all generated versions. This
+              action cannot be undone.
             </p>
             <div className="rounded-md border border-border/20 bg-muted/30 p-3 text-xs text-muted-foreground">
               <div>User ID: {deleteTarget.userId || "Unknown"}</div>
@@ -244,7 +274,12 @@ export default function AdminModerationDashboard() {
                 ) : (
                   <>
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                      />
                     </svg>
                     Delete Image
                   </>

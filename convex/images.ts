@@ -4,8 +4,8 @@ import { internal } from "./_generated/api";
 import { mutation, query } from "./_generated/server";
 import { assertOwner, requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
-import { PaginatedGalleryValidator } from "./lib/validators";
 import { getOrCreateUser } from "./lib/users";
+import { PaginatedGalleryValidator } from "./lib/validators";
 
 export const generateUploadUrl = mutation({
   args: {},
@@ -31,7 +31,9 @@ export const uploadAndScheduleGeneration = mutation({
     // Get or create user and check credits
     const user = await getOrCreateUser(ctx, userId);
     if (user.credits < 1) {
-      throw new Error("INSUFFICIENT_CREDITS: You need at least 1 credit to generate an image. Please purchase credits to continue.");
+      throw new Error(
+        "INSUFFICIENT_CREDITS: You need at least 1 credit to generate an image. Please purchase credits to continue."
+      );
     }
 
     // Validate file metadata (size/type) before consuming credits
@@ -135,6 +137,8 @@ export const updateFeaturedStatus = mutation({
     await ctx.db.patch(args.imageId, {
       isFeatured: args.isFeatured,
       featuredAt: args.isFeatured ? Date.now() : undefined,
+      // Ensure isDisabledByAdmin is explicitly set for compound index queries
+      isDisabledByAdmin: image.isDisabledByAdmin ?? false,
     });
     return null;
   },
