@@ -67,6 +67,10 @@ export default function HeroGalleryDemo() {
     }
   }, [allImages.length, selectedIndex]);
 
+  // Compute a safe index that's always within bounds (prevents race condition)
+  const safeSelectedIndex =
+    allImages.length > 0 ? Math.min(selectedIndex, allImages.length - 1) : 0;
+
   // Show loading state while images are being fetched
   const isLoading = featuredResult === undefined || allImages.length === 0;
 
@@ -131,7 +135,7 @@ export default function HeroGalleryDemo() {
               <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl bg-muted/20">
                 <AnimatePresence mode="wait">
                   <motion.div
-                    key={selectedIndex}
+                    key={safeSelectedIndex}
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.05 }}
@@ -139,7 +143,7 @@ export default function HeroGalleryDemo() {
                     className="relative w-full h-full"
                   >
                     <ImageWithFallback
-                      src={allImages[selectedIndex].url}
+                      src={allImages[safeSelectedIndex].url}
                       alt="Featured anime transformation"
                       fill
                       className="object-cover"
