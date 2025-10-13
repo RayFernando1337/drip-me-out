@@ -375,7 +375,7 @@ export default function PublicGallery() {
     {/* ✅ REUSE - Keep existing header structure */}
     <header className="sticky top-0 z-40 flex items-center justify-between w-full px-6 py-4 border-b border-border/20 bg-background/95 backdrop-blur-sm">
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Anime Studio</h1>
+        <h1 className="text-2xl font-bold text-foreground">Anime Leak</h1>
         <p className="text-sm text-muted-foreground mt-0.5">
           Transform objects into anime illustrations
         </p>

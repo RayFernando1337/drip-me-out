@@ -3,19 +3,20 @@
 **Document Name:** Image Sharing Feature Implementation Plan  
 **Date:** August 31st, 2025  
 **Version:** 1.0  
-**Project:** Drip Me Out - AI Diamond Chain Generator
+**Project:** Anime Leak - AI Anime Transformation
 
 ---
 
 ## Executive Summary
 
-This technical specification outlines the implementation of a comprehensive image sharing feature for the Drip Me Out application. The feature will enable users to click on generated images in the gallery, view them in detail, and share them via unique URLs with configurable privacy settings.
+This technical specification outlines the implementation of a comprehensive image sharing feature for the Anime Leak application. The feature will enable users to click on generated images in the gallery, view them in detail, and share them via unique URLs with configurable privacy settings.
 
 ## Architecture Overview
 
 ### Current State Analysis
 
 The application currently consists of:
+
 - **Frontend:** Next.js 15 App Router (`/app` directory) with React 19
 - **Component Library:** shadcn/ui components in `/components/ui`
 - **Backend:** Convex real-time platform handling storage and database
@@ -24,16 +25,19 @@ The application currently consists of:
 ### Key Files and Their Roles
 
 #### Frontend Components
+
 - `/app/page.tsx` (lines 1-367): Main page with image gallery display
-- `/components/ImagePreview.tsx` (lines 1-133): Gallery grid component  
+- `/components/ImagePreview.tsx` (lines 1-133): Gallery grid component
 - `/components/Webcam.tsx` (lines 1-298): Camera capture interface
 
 #### Backend Functions
+
 - `/convex/images.ts` (lines 1-40): Image CRUD operations
 - `/convex/generate.ts` (lines 1-234): AI generation logic
 - `/convex/schema.ts` (lines 1-17): Database schema definitions
 
 #### Configuration Files
+
 - `/CLAUDE.md`: Main project guidelines
 - `/app/CLAUDE.md`: App Router conventions
 - `/components/CLAUDE.md`: Component patterns
@@ -44,14 +48,18 @@ The application currently consists of:
 ## Phase 1: Image Modal Foundation
 
 ### Objective
+
 Create a modal interface for viewing individual images with full-size display and metadata.
 
 ### Component Dependencies
+
 This phase requires the following shadcn/ui components:
+
 - **Dialog** - Already installed (used in existing codebase)
 - **Button** - Already installed (used throughout app)
 
 If any components are missing, install with:
+
 ```bash
 bunx shadcn@latest add [component-name]
 ```
@@ -59,9 +67,11 @@ bunx shadcn@latest add [component-name]
 ### Implementation Details
 
 #### 1.1 Create ImageModal Component
+
 **File:** `/components/ImageModal.tsx` (new file)
 
 **Prerequisites - Ensure Dialog component is installed:**
+
 ```bash
 # Dialog component should already be installed (imported in page.tsx)
 # If not present, install with:
@@ -87,16 +97,19 @@ interface ImageModalProps {
 ```
 
 **Key Requirements:**
+
 - Use existing Dialog component from `/components/ui/dialog.tsx`
 - Implement keyboard navigation (ESC key handler - Dialog component handles this automatically)
 - Display image at full resolution with proper aspect ratio
 - Show creation timestamp formatted with `toLocaleDateString()`
 
 #### 1.2 Update ImagePreview Component
+
 **File:** `/components/ImagePreview.tsx`
 **Modification Location:** Lines 66-108 (image grid mapping)
 
 **Changes Required:**
+
 ```typescript
 // Add to imports (line 1)
 import { useState } from "react";
@@ -106,18 +119,20 @@ import ImageModal from "./ImageModal";
 const [selectedImage, setSelectedImage] = useState<UploadedImage | null>(null);
 
 // Modify image div to be clickable (line 67)
-<div 
-  key={`${image.type}-${image.index}`} 
+<div
+  key={`${image.type}-${image.index}`}
   className="group cursor-pointer"
   onClick={() => setSelectedImage(image.data)}
 >
 ```
 
 #### 1.3 Add Modal State Management
+
 **File:** `/app/page.tsx`
 **Modification Location:** Lines 36-39 (state declarations)
 
 **Verification Steps:**
+
 1. Run `bun run dev` and navigate to http://localhost:3000
 2. Click any image in the gallery
 3. Modal should appear with full-size image
@@ -129,11 +144,13 @@ const [selectedImage, setSelectedImage] = useState<UploadedImage | null>(null);
 ## Phase 2: Core Sharing Implementation
 
 ### Objective
+
 Implement URL generation, copy-to-clipboard, and public share routes.
 
 ### Implementation Details
 
 #### 2.1 Add Share Query to Convex
+
 **File:** `/convex/images.ts`
 **Add After:** Line 40
 
@@ -143,16 +160,16 @@ export const getImageById = query({
   handler: async (ctx, args) => {
     const image = await ctx.db.get(args.imageId);
     if (!image) return null;
-    
+
     // Check if sharing is enabled (will be added in Phase 4)
     const sharingEnabled = image.sharingEnabled !== false;
     if (!sharingEnabled) return null;
-    
+
     // Check expiration (will be added in Phase 4)
     if (image.shareExpiresAt && image.shareExpiresAt < Date.now()) {
       return null;
     }
-    
+
     return {
       ...image,
       url: await ctx.storage.getUrl(image.body),
@@ -162,11 +179,13 @@ export const getImageById = query({
 ```
 
 **Important:** Follow Convex patterns from `/convex/CLAUDE.md`:
+
 - Use validators with `v.id("images")`
 - Return null for not found/unauthorized
 - Use `ctx.storage.getUrl()` for signed URLs
 
 #### 2.2 Create Share Route
+
 **File:** `/app/share/[imageId]/page.tsx` (new file)
 
 ```typescript
@@ -180,9 +199,9 @@ export async function generateMetadata({ params }: { params: { imageId: string }
     api.images.getImageById,
     { imageId: params.imageId as Id<"images"> }
   );
-  
+
   const image = preloaded.result;
-  
+
   return {
     title: image ? "Dripped Out Image" : "Image Not Found",
     description: "Check out my AI-generated diamond chain photo!",
@@ -197,12 +216,13 @@ export default async function SharePage({ params }: { params: { imageId: string 
     api.images.getImageById,
     { imageId: params.imageId as Id<"images"> }
   );
-  
+
   return <SharePageClient preloaded={preloaded} />;
 }
 ```
 
 #### 2.3 Create Share Page Client Component
+
 **File:** `/app/share/[imageId]/client.tsx` (new file)
 
 ```typescript
@@ -220,7 +240,7 @@ export default function SharePageClient({
   preloaded: Preloaded<typeof api.images.getImageById>;
 }) {
   const image = usePreloadedQuery(preloaded);
-  
+
   if (!image) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -236,7 +256,7 @@ export default function SharePageClient({
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-2xl w-full">
@@ -257,6 +277,7 @@ export default function SharePageClient({
 ```
 
 #### 2.4 Add Share Button to Modal
+
 **File:** `/components/ImageModal.tsx`
 **Add to component body:**
 
@@ -270,7 +291,7 @@ const [copied, setCopied] = useState(false);
 
 const handleShare = async () => {
   const shareUrl = `${window.location.origin}/share/${image._id}`;
-  
+
   try {
     await navigator.clipboard.writeText(shareUrl);
     setCopied(true);
@@ -289,6 +310,7 @@ const handleShare = async () => {
 ```
 
 **Verification Steps:**
+
 1. Click an image to open modal
 2. Click "Copy Share Link" button
 3. Paste link in new browser tab
@@ -300,11 +322,13 @@ const handleShare = async () => {
 ## Phase 3: Quick Win Enhancements
 
 ### Objective
+
 Add optional Twitter sharing and native mobile share capabilities.
 
 ### Implementation Details
 
 #### 3.1 Twitter Share Button
+
 **File:** `/components/ImageModal.tsx`
 **Add after Copy button:**
 
@@ -319,8 +343,8 @@ const handleTwitterShare = () => {
 };
 
 // Add button (only 5 lines of JSX)
-<Button 
-  onClick={handleTwitterShare} 
+<Button
+  onClick={handleTwitterShare}
   variant="outline"
   className="flex items-center gap-2"
 >
@@ -330,6 +354,7 @@ const handleTwitterShare = () => {
 ```
 
 #### 3.2 Native Mobile Share
+
 **File:** `/components/ImageModal.tsx`
 **Add Web Share API check:**
 
@@ -338,7 +363,7 @@ import { Share2 } from "lucide-react";
 
 const handleNativeShare = async () => {
   const shareUrl = `${window.location.origin}/share/${image._id}`;
-  
+
   if (navigator.share) {
     try {
       await navigator.share({
@@ -363,6 +388,7 @@ const handleNativeShare = async () => {
 ```
 
 **Verification Steps:**
+
 1. Test on mobile device (iOS Safari or Android Chrome)
 2. Click native share button
 3. Verify system share sheet appears
@@ -373,14 +399,18 @@ const handleNativeShare = async () => {
 ## Phase 4: Privacy & Expiration Settings
 
 ### Objective
+
 Implement per-image sharing controls with expiration options.
 
 ### Component Dependencies
+
 This phase requires additional shadcn/ui components:
+
 - **Switch** - For toggle controls (needs installation)
 - **Select** - Already installed (used in Webcam.tsx)
 
 Install missing components:
+
 ```bash
 bunx shadcn@latest add switch
 ```
@@ -388,6 +418,7 @@ bunx shadcn@latest add switch
 ### Implementation Details
 
 #### 4.1 Update Database Schema
+
 **File:** `/convex/schema.ts`
 **Modification Location:** Lines 5-12 (images table definition)
 
@@ -403,15 +434,16 @@ images: defineTable({
   sharingEnabled: v.optional(v.boolean()),
   shareExpiresAt: v.optional(v.number()),
 })
-.index("by_created_at", ["createdAt"])
-.index("by_is_generated", ["isGenerated"])
-.index("by_generation_status", ["generationStatus"])
-.index("by_sharing_enabled", ["sharingEnabled"]) // New index
+  .index("by_created_at", ["createdAt"])
+  .index("by_is_generated", ["isGenerated"])
+  .index("by_generation_status", ["generationStatus"])
+  .index("by_sharing_enabled", ["sharingEnabled"]); // New index
 ```
 
 **Important:** After schema change, run `bunx convex dev` to sync.
 
 #### 4.2 Add Share Settings Mutation
+
 **File:** `/convex/images.ts`
 **Add after getImageById query:**
 
@@ -424,25 +456,27 @@ export const updateShareSettings = mutation({
   },
   handler: async (ctx, args) => {
     const { imageId, sharingEnabled, expirationHours } = args;
-    
+
     const updateData: any = { sharingEnabled };
-    
+
     if (expirationHours) {
-      updateData.shareExpiresAt = Date.now() + (expirationHours * 60 * 60 * 1000);
+      updateData.shareExpiresAt = Date.now() + expirationHours * 60 * 60 * 1000;
     } else {
       updateData.shareExpiresAt = null;
     }
-    
+
     await ctx.db.patch(imageId, updateData);
   },
 });
 ```
 
 #### 4.3 Add Settings UI to Modal
+
 **File:** `/components/ImageModal.tsx`
 **Add settings controls:**
 
 **Prerequisites - Install required shadcn/ui components:**
+
 ```bash
 # Install Switch component if not already present
 bunx shadcn@latest add switch
@@ -498,7 +532,7 @@ const handleExpirationChange = async (value: string) => {
       Share Settings
     </span>
   </Button>
-  
+
   {showSettings && (
     <div className="mt-4 space-y-4">
       <div className="flex items-center justify-between">
@@ -508,7 +542,7 @@ const handleExpirationChange = async (value: string) => {
           onCheckedChange={handleSharingToggle}
         />
       </div>
-      
+
       {sharingEnabled && (
         <div className="space-y-2">
           <label className="text-sm font-medium">Link Expiration</label>
@@ -531,6 +565,7 @@ const handleExpirationChange = async (value: string) => {
 ```
 
 **Verification Steps:**
+
 1. Open image modal
 2. Toggle sharing on/off
 3. Verify link returns 404 when disabled
@@ -543,6 +578,7 @@ const handleExpirationChange = async (value: string) => {
 ## Testing & Verification Checklist
 
 ### Phase 1 Verification
+
 - [ ] Images in gallery are clickable
 - [ ] Modal opens with full-size image
 - [ ] ESC key closes modal
@@ -550,6 +586,7 @@ const handleExpirationChange = async (value: string) => {
 - [ ] Image metadata displays correctly
 
 ### Phase 2 Verification
+
 - [ ] Share button generates correct URL
 - [ ] Copy to clipboard shows success toast
 - [ ] Shared URL loads image correctly
@@ -557,11 +594,13 @@ const handleExpirationChange = async (value: string) => {
 - [ ] 404 page shows for invalid IDs
 
 ### Phase 3 Verification
+
 - [ ] Twitter button opens pre-filled tweet
 - [ ] Native share appears on mobile only
 - [ ] Share sheet includes correct data
 
 ### Phase 4 Verification
+
 - [ ] Sharing toggle enables/disables access
 - [ ] Expiration times are calculated correctly
 - [ ] Expired links show appropriate message
@@ -590,6 +629,7 @@ const handleExpirationChange = async (value: string) => {
 ## Migration & Rollback Plan
 
 ### Migration Steps
+
 1. Deploy schema changes first (backwards compatible)
 2. Deploy backend queries and mutations
 3. Deploy frontend components
@@ -597,6 +637,7 @@ const handleExpirationChange = async (value: string) => {
 5. Gradual rollout to production
 
 ### Rollback Strategy
+
 - Each phase is independently deployable
 - No destructive schema changes
 - Feature flags can disable UI elements
@@ -623,11 +664,11 @@ const handleExpirationChange = async (value: string) => {
       page.tsx       (new - server component)
       client.tsx     (new - client component)
   page.tsx          (modified - lines 36-39)
-  
+
 /components
   ImageModal.tsx    (new - full component)
   ImagePreview.tsx  (modified - lines 1, 32, 67)
-  
+
 /convex
   images.ts         (modified - add 2 new functions)
   schema.ts         (modified - lines 5-12)
@@ -666,6 +707,7 @@ bunx shadcn@latest add select    # For dropdown menus
 This specification is designed for sequential implementation where each phase builds upon the previous one. Each phase is independently verifiable and provides immediate value to users. The implementation follows all established patterns from the CLAUDE.md documentation files and maintains consistency with the existing codebase architecture.
 
 Key architectural decisions:
+
 - Leveraging Convex's real-time capabilities for instant updates
 - Using Next.js App Router for optimal SEO on share pages
 - Minimal external dependencies (no new packages required)

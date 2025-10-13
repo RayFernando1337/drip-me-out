@@ -1,9 +1,9 @@
 "use node";
 
-import { internalAction } from "../_generated/server";
-import { v } from "convex/values";
 import { Polar } from "@polar-sh/sdk";
+import { v } from "convex/values";
 import { internal } from "../_generated/api";
+import { internalAction } from "../_generated/server";
 
 function polarServer(): "sandbox" | "production" {
   const env = (process.env.POLAR_ENV || "sandbox").toLowerCase();
@@ -25,9 +25,12 @@ export const processCheckout = internalAction({
     const productId = process.env.POLAR_PRODUCT_ID;
 
     // Get session to verify it exists and get userId
-    const session = await ctx.runQuery(internal.payments.checkoutSessionHelpers.getSessionInternal, {
-      sessionId: args.sessionId,
-    });
+    const session = await ctx.runQuery(
+      internal.payments.checkoutSessionHelpers.getSessionInternal,
+      {
+        sessionId: args.sessionId,
+      }
+    );
 
     if (!session) {
       console.error("[processCheckout] Session not found:", args.sessionId);
@@ -57,7 +60,7 @@ export const processCheckout = internalAction({
         embedOrigin: args.embedOrigin,
         customerEmail: args.customerEmail,
         customerName: args.customerName,
-        metadata: { userId: session.userId, app: "drip-me-out" },
+        metadata: { userId: session.userId, app: "animeleak" },
       });
 
       // Update session with success

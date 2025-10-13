@@ -96,8 +96,8 @@ export default function HeroGalleryDemo() {
                   Transform Objects Into Anime Art
                 </h1>
                 <p className="text-lg md:text-xl text-gray-200 leading-relaxed drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)]">
-                  Watch everyday items come alive with Studio Ghibli-inspired magic. Our AI
-                  transforms ordinary objects into whimsical anime illustrations.
+                  Where anime leaks into reality. Watch everyday objects transform into whimsical
+                  anime illustrations with bold outlines, vibrant colors, and magical effects.
                 </p>
               </div>
 
@@ -124,7 +124,7 @@ export default function HeroGalleryDemo() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span>🎨</span>
-                  <span>Studio Ghibli Style</span>
+                  <span>Anime Reality</span>
                 </div>
               </div>
             </div>

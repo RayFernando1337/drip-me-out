@@ -136,7 +136,7 @@ export default function ImageModal({
     : "Removed by moderators. Contact support to request reinstatement.";
 
   const handleShare = async () => {
-    const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
+    const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/share/${currentImage._id}`;
 
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -149,8 +149,8 @@ export default function ImageModal({
   };
 
   const handleTwitterShare = () => {
-    const shareUrl = `${window.location.origin}/share/${currentImage._id}`;
-    const text = "Check out my AI-generated anime transformation! 🎨✨";
+    const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/share/${currentImage._id}`;
+    const text = "Check out my anime transformation! Created with @RayFernando1337 🎨✨";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");
   };
@@ -450,7 +450,8 @@ export default function ImageModal({
               Delete Image?
             </DialogTitle>
             <DialogDescription className="text-muted-foreground">
-              This will permanently remove this image and all generated versions. This cannot be undone.
+              This will permanently remove this image and all generated versions. This cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-end sm:space-x-2">

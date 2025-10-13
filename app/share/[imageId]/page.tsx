@@ -14,24 +14,24 @@ export async function generateMetadata({ params }: { params: Promise<{ imageId: 
 
   if (!image) {
     return {
-      title: "Image Not Found - Anime Studio",
+      title: "Image Not Found - Anime Leak",
       description: "This image is no longer available.",
     };
   }
 
   return {
     title: "Check Out My Anime Transformation!",
-    description: "I transformed an object into anime art with AI. Create yours!",
+    description: "Watch objects transform as anime leaks into reality. Create yours!",
     openGraph: {
       title: "Check Out My Anime Transformation!",
-      description: "I transformed an object into anime art with AI. Create yours!",
+      description: "Watch objects transform as anime leaks into reality. Create yours!",
       images: [{ url: image.url }],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
       title: "Check Out My Anime Transformation!",
-      description: "I transformed an object into anime art with AI.",
+      description: "Watch objects transform as anime leaks into reality.",
       images: [image.url],
     },
   };
