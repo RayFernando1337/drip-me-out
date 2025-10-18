@@ -2,7 +2,6 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
-import imageSize from "image-size";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
@@ -158,50 +157,11 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Gemini response did not include image data");
       }
 
-      // Convert base64 to Uint8Array and attempt WebP transcoding for storage
-      const encoderEndpoint =
-        process.env.IMAGE_ENCODER_ENDPOINT ||
-        (process.env.NEXT_PUBLIC_SITE_URL
-          ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")}/api/encode-webp`
-          : null);
-
-      if (!encoderEndpoint) {
-        throw new Error("Image encoder endpoint not configured");
-      }
-
-      const encoderResponse = await fetch(encoderEndpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          inputBase64: b64Out,
-          mimeType,
-          quality: 80,
-          includePlaceholder: true,
-        }),
-      });
-
-      if (!encoderResponse.ok) {
-        const text = await encoderResponse.text();
-        throw new Error(
-          `Image encoder failed (${encoderResponse.status}): ${
-            text?.slice(0, 200) || encoderResponse.statusText
-          }`
-        );
-      }
-
-      const encoderResult: {
-        encodedBase64: string;
-        contentType: string;
-        width: number | null;
-        height: number | null;
-        sizeBytes: number;
-        placeholderBlurDataUrl?: string;
-      } = await encoderResponse.json();
-
-      const encodedBuffer = Buffer.from(encoderResult.encodedBase64, "base64");
-      const outputContentType = encoderResult.contentType || mimeType || "image/png";
-
-      const imageBlob = new Blob([encodedBuffer], { type: outputContentType });
+      // Convert base64 directly to Blob and store in Convex
+      // Gemini already returns optimized images (~1.5MB), no need to re-compress
+      const imageBuffer = Buffer.from(b64Out, "base64");
+      const outputContentType = mimeType || "image/png";
+      const imageBlob = new Blob([imageBuffer], { type: outputContentType });
       const generatedStorageId = await ctx.storage.store(imageBlob);
 
       // Verify the generated image was stored properly
@@ -210,39 +170,16 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Failed to get storage URL after upload");
       }
 
-      let fallbackDimensions: ReturnType<typeof imageSize> | null = null;
-      const getDimensions = () => {
-        if (!fallbackDimensions) {
-          fallbackDimensions = imageSize(encodedBuffer);
-        }
-        return fallbackDimensions;
-      };
-
-      const width =
-        typeof encoderResult.width === "number"
-          ? encoderResult.width
-          : (() => {
-              const dimensions = getDimensions();
-              return typeof dimensions.width === "number" ? dimensions.width : undefined;
-            })();
-      const height =
-        typeof encoderResult.height === "number"
-          ? encoderResult.height
-          : (() => {
-              const dimensions = getDimensions();
-              return typeof dimensions.height === "number" ? dimensions.height : undefined;
-            })();
-      const sizeBytes = encoderResult.sizeBytes ?? encodedBuffer.byteLength;
-
       // Save the generated image record
+      // Width/height and blur placeholder can be undefined - Vercel will handle optimization
       await ctx.runMutation(api.images.saveGeneratedImage, {
         storageId: generatedStorageId,
         originalImageId: originalImageId,
         contentType: outputContentType,
-        width,
-        height,
-        sizeBytes,
-        placeholderBlurDataUrl: encoderResult.placeholderBlurDataUrl,
+        width: undefined,
+        height: undefined,
+        sizeBytes: imageBuffer.byteLength,
+        placeholderBlurDataUrl: undefined,
       });
 
       // Mark the original image as completed
