@@ -1,5 +1,8 @@
+"use node";
+
 import { GoogleGenAI } from "@google/genai";
 import imageSize from "image-size";
+import { ImagePool } from "@squoosh/lib";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -292,9 +295,34 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Gemini response did not include image data");
       }
 
-      // Convert base64 to Uint8Array and store in Convex storage
+      // Convert base64 to Uint8Array and attempt WebP transcoding for storage
       const imageBuffer = base64ToUint8Array(b64Out);
-      const imageBlob = new Blob([imageBuffer as BlobPart], { type: "image/png" });
+      let encodedBuffer: Uint8Array = imageBuffer;
+      let outputContentType: string = "image/png";
+
+      let pool: ImagePool | undefined;
+      try {
+        pool = new ImagePool(1);
+        const image = pool.ingestImage(Buffer.from(imageBuffer));
+        await image.encode({
+          webp: {
+            quality: 80,
+          },
+        });
+        const webpResult = await image.encodedWith.webp;
+        if (webpResult?.binary) {
+          encodedBuffer = webpResult.binary;
+          outputContentType = "image/webp";
+        }
+      } catch (encodeError) {
+        console.warn("[generateImage] Failed to transcode generated image to WebP", encodeError);
+        encodedBuffer = imageBuffer;
+        outputContentType = mimeType || "image/png";
+      } finally {
+        await pool?.close();
+      }
+
+      const imageBlob = new Blob([encodedBuffer as BlobPart], { type: outputContentType });
       const generatedStorageId = await ctx.storage.store(imageBlob);
 
       // Verify the generated image was stored properly
@@ -303,15 +331,15 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Failed to get storage URL after upload");
       }
 
-      const dimensions = imageSize(imageBuffer);
+      const dimensions = imageSize(Buffer.from(encodedBuffer));
       const width = typeof dimensions.width === "number" ? dimensions.width : undefined;
       const height = typeof dimensions.height === "number" ? dimensions.height : undefined;
       const detectedType = dimensions.type;
       const normalizedType = detectedType === "jpg" ? "jpeg" : detectedType;
       const generatedContentType = normalizedType
         ? `image/${normalizedType}`
-        : imageBlob.type || mimeType || "image/png";
-      const sizeBytes = imageBuffer.byteLength;
+        : imageBlob.type || outputContentType || mimeType || "image/png";
+      const sizeBytes = encodedBuffer.byteLength;
 
       // Save the generated image record
       await ctx.runMutation(api.generate.saveGeneratedImage, {

@@ -43,18 +43,23 @@ function PublicImageModal({ image, isOpen, onClose }: PublicImageModalProps) {
     return null;
   }
 
+  const intrinsicWidth = image.originalWidth ?? 1024;
+  const intrinsicHeight = image.originalHeight ?? 1024;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className="max-h-[90vh] max-w-4xl w-[min(96vw,960px)] overflow-y-auto p-0 md:overflow-hidden">
         <div className="flex h-full flex-col md:max-h-[90vh] md:flex-row">
           <div className="relative bg-black/5 md:flex-1">
-            <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
+            <div className="flex h-[min(60vh,420px)] w-full items-center justify-center p-4 md:h-full md:min-h-[520px]">
               <ImageWithFallback
                 src={image.url}
                 alt="Featured transformation preview"
-                fill
-                className="object-contain"
+                width={intrinsicWidth}
+                height={intrinsicHeight}
+                className="h-auto w-full max-h-[min(60vh,420px)] md:max-h-[80vh] object-contain"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
+                style={{ width: "100%", height: "auto" }}
                 priority={false}
                 placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
                 blurDataURL={image.placeholderBlurDataUrl}
