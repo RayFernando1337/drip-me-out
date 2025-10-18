@@ -72,6 +72,19 @@ Transform the upload pipeline so every user-provided asset is stored in Convex a
 - Store as short base64 string; optional toggle if storage needs to remain minimal (since average <800 B).
 - Apply via `placeholder="blur"` and `blurDataURL` in Next.js image components (per docs, this avoids additional requests).
 
+## End-to-End Workflow Reference
+1. **Local preparation (client):** Upon file selection, `lib/imagePrep.ts` converts HEIC/HEIF to WebP via `heic2any`, compresses all inputs with `browser-image-compression` (≈1600 px cap, ≤3 MB), extracts `naturalWidth`/`naturalHeight` using `createImageBitmap`, and (optionally) generates a ≤1 KB blur preview using `OffscreenCanvas`.
+2. **Metadata-enriched upload:** The upload flow in `app/page.tsx` submits `{ file: WebP Blob, width, height, contentType: "image/webp", blurDataUrl? }` to `uploadAndScheduleGeneration`. The mutation validates `image/webp`, persists metadata (`contentType`, `originalWidth`, `originalHeight`, `placeholderBlurDataUrl`) on the `images` table, and stores the WebP master in Convex storage (files now typically a few hundred KB instead of multi-megabyte JPEGs).
+3. **Reactive UI:** `mapImagesToUrls` returns signed URLs plus metadata so components using `useQuery` remain the single source of truth—no client cache divergence. Frontend views should switch to explicit `width`/`height` or `placeholder="blur"` as metadata becomes available.
+4. **Generation pipeline:** After the AI job finishes, the server recomputes metadata for the generated asset (dimensions, optional blur) before marking `generationStatus: "completed"`. Generated documents must never assume upstream metadata.
+5. **Monitoring:** Verify post-deploy that Vercel’s Image Optimization dashboard shows fewer initial transformations and smaller writes (target ≥75 % reduction). Check gallery/hero LCP metrics and ensure no regressions in Convex reactivity.
+
+> **Verification checklist for implementers**
+> - Upload different formats (JPEG, PNG, HEIC) and confirm Convex stores WebP masters with accurate `contentType`, `originalWidth`, `originalHeight`, and optional `placeholderBlurDataUrl`.
+> - Ensure `useQuery`-driven components (gallery, modals, share page) automatically reflect new metadata and render without Next.js image warnings.
+> - Confirm generated images receive recomputed metadata after the background job completes.
+> - Measure Vercel Observability (transformations, cache write units) before/after to validate the optimization.
+
 ## Testing & Verification
 - **Local:**  
   - `bunx convex dev` (schema/mutation validation)  
