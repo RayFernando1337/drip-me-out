@@ -98,7 +98,7 @@ const isProcessing = images.some(
 ## Performance
 - Prefer server components; mark client only when necessary
 - Lazy-load heavy components via dynamic()
-- Use Next.js Image where possible
+- Use `next/image` (or shared `ImageWithFallback`) for all Convex-hosted assets; remote patterns already cover `https://*.convex.cloud/api/storage/**`, so leave images optimized unless the format is incompatible.
 
 ## Testing UI Changes
 ```bash

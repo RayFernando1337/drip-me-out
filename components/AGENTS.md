@@ -74,6 +74,8 @@ export function Component() {
 - Mark components as "use client" only when necessary
 - Prefer server components in /app; keep UI components focused and lightweight
 - Lazy-load heavy components with `dynamic()`
+- Prefer `next/image` (or the shared `ImageWithFallback`) for all raster content. Convex URLs are already whitelisted in `next.config.ts`, so avoid `unoptimized` unless the source is SVG/GIF or explicitly exempt from optimization.
+- When using `fill`, ensure the parent has `position: relative` and pass a `sizes` string that reflects responsive layouts. Hero and gallery images should set `priority` only when above the fold to balance Vercel image costs.
 
 ## Error Handling
 ```ts
