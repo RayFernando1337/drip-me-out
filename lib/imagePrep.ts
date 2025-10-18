@@ -11,7 +11,13 @@ export type Prepared = {
   wasCompressed: boolean;
 };
 
-const ALLOWED_INPUTS = ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"] as const;
+const ALLOWED_INPUTS = [
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+  "image/heif",
+  "image/webp",
+] as const;
 export type AllowedMime = (typeof ALLOWED_INPUTS)[number];
 
 export function isAllowedType(type: string): type is AllowedMime {
@@ -46,7 +52,7 @@ async function decodeImage(blob: Blob): Promise<DecodedImage> {
     img.onload = () => resolve(img);
     img.onerror = (event) => {
       URL.revokeObjectURL(objectUrl);
-      reject(event instanceof ErrorEvent ? event.error ?? event : event);
+      reject(event instanceof ErrorEvent ? (event.error ?? event) : event);
     };
     img.src = objectUrl;
   });
@@ -104,28 +110,35 @@ export async function prepareImageForUpload(file: File): Promise<Prepared> {
     wasTranscoded = true;
   }
 
-  // 2) Compress/downscale to ≤ 3 MB and max 1600px
-  type ImageCompression = (
-    file: File,
-    options: {
-      maxSizeMB?: number;
-      maxWidthOrHeight?: number;
-      fileType?: string;
-      useWebWorker?: boolean;
-      initialQuality?: number;
-    }
-  ) => Promise<File>;
-  const imageCompressionModule = await import("browser-image-compression");
-  const imageCompression = imageCompressionModule.default as unknown as ImageCompression;
-  const compressed: File = await imageCompression(working as File, {
-    maxSizeMB: 3,
-    maxWidthOrHeight: 1600,
-    fileType: "image/webp",
-    useWebWorker: true,
-    initialQuality: 0.82,
-  });
+  // 2) Compress/downscale to ≤ 3 MB and max 1600px (only if needed)
+  let compressed: File = working as File;
 
-  if (compressed.size < (working as File).size) wasCompressed = true;
+  // Skip compression if image is already small enough (< 1MB)
+  const needsCompression = working.size > 1 * 1024 * 1024;
+
+  if (needsCompression) {
+    type ImageCompression = (
+      file: File,
+      options: {
+        maxSizeMB?: number;
+        maxWidthOrHeight?: number;
+        fileType?: string;
+        useWebWorker?: boolean;
+        initialQuality?: number;
+      }
+    ) => Promise<File>;
+    const imageCompressionModule = await import("browser-image-compression");
+    const imageCompression = imageCompressionModule.default as unknown as ImageCompression;
+    compressed = await imageCompression(working as File, {
+      maxSizeMB: 3,
+      maxWidthOrHeight: 1600,
+      fileType: "image/webp",
+      useWebWorker: true,
+      initialQuality: 0.82,
+    });
+
+    if (compressed.size < (working as File).size) wasCompressed = true;
+  }
 
   const normalizedFile =
     compressed.type === "image/webp"

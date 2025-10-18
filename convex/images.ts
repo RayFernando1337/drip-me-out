@@ -523,7 +523,8 @@ export const getGalleryImagesPaginated = query({
         continue;
       }
       const status = img.generationStatus;
-      if (status === "pending" || status === "processing") {
+      // Show original images that are pending, processing, OR completed
+      if (status === "pending" || status === "processing" || status === "completed") {
         galleryImages.push(img);
       }
     }

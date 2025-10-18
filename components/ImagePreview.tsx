@@ -85,7 +85,8 @@ export default function ImagePreview({
               }}
             >
               <div className="bg-card border border-border/30 hover:border-border transition-all duration-200 overflow-hidden rounded-xl shadow-sm hover:shadow-md">
-                <div className="relative w-full" style={{ aspectRatio: `${width} / ${height}` }}>
+                {/* Force square aspect ratio for consistent gallery layout */}
+                <div className="aspect-square relative w-full">
                   <ImageWithFallback
                     src={image.data.url}
                     alt="Transformed image"

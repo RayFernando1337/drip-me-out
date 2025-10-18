@@ -23,6 +23,7 @@ documentation/
 ### For Active Features
 
 Each active feature should have two files:
+
 1. **`[feature-name]-spec.md`** - Technical specification
 2. **`[feature-name]-progress.md`** - Progress tracking
 
@@ -42,6 +43,7 @@ Each active feature should have two files:
 ### AI Agent Context
 
 When Claude or other AI agents work on the project:
+
 - They should check `/features/active/` for current work
 - Look for matching `-progress.md` files to understand status
 - Reference completed features in `/features/completed/` for patterns
@@ -57,18 +59,23 @@ When Claude or other AI agents work on the project:
 **Status:** Planning | Active | Complete
 
 ## Executive Summary
+
 Brief overview of the feature and its purpose.
 
 ## Architecture Overview
+
 Technical architecture and integration points.
 
 ## Implementation Phases
+
 Break down into logical phases if complex.
 
 ## Testing & Verification
+
 Test criteria and verification steps.
 
 ## Security Considerations
+
 Any security implications or requirements.
 ```
 
@@ -81,29 +88,53 @@ Any security implications or requirements.
 **Specification:** Link to spec file
 
 ## Overview
+
 Brief description of implementation status.
 
 ## Phase Completion Summary
-| Phase | Status | Completion | Notes |
-|-------|--------|------------|-------|
-| Phase 1 | ⏸️ ✅ | 0-100% | Details |
+
+| Phase   | Status | Completion | Notes   |
+| ------- | ------ | ---------- | ------- |
+| Phase 1 | ⏸️ ✅  | 0-100%     | Details |
 
 ## Current Tasks
+
 - [ ] Task 1
 - [x] Completed task
 
 ## Next Steps
+
 What needs to be done next.
 
 ## Blockers/Issues
+
 Any current blockers or issues.
 ```
 
 ## CLAUDE.md Integration
 
 The main `/CLAUDE.md` file should reference this documentation structure but NOT contain feature-specific details. Instead, it should point AI agents to:
+
 - Check `/documentation/features/active/` for current work
 - Use the documentation structure for understanding project features
 - Follow the patterns established in completed features
 
 This keeps CLAUDE.md files stable and focused on coding patterns while feature documentation remains dynamic.
+
+## Summary Files & Reports
+
+**IMPORTANT RULE:** Never create summary files (e.g., `SUMMARY.md`, `REBRAND-SUMMARY.md`, `IMPLEMENTATION-SUMMARY.md`) in the project root directory.
+
+All summary and implementation reports should be placed in:
+
+- `/documentation/features/completed/[feature-name]/` for completed features
+- `/documentation/fixes/` for bug fixes and one-off improvements
+- `/documentation/features/active/` for in-progress work summaries
+
+**Never place summary files in:**
+
+- ❌ Project root (`/`)
+- ❌ Any app directories (`/app`, `/components`, `/convex`)
+- ❌ Configuration directories
+
+**Rationale:** Keeps the root directory clean and all documentation centralized in the `/documentation` folder for easier maintenance and navigation.
