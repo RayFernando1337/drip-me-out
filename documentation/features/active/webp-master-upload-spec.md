@@ -44,10 +44,14 @@ Transform the upload pipeline so every user-provided asset is stored in Convex a
   - Helpers:
     - `mapImagesToUrls` should merge metadata into returned payloads.
     - Any generated-image writes must also populate metadata (see below).
+- **Next.js API encoder (new)**  
+  - Add `/api/encode-webp` running in the Node runtime with `sharp`.
+  - Accept base64 payloads from Convex, emit WebP (or PNG fallback) plus width/height/size metadata and a WebP blur placeholder.
+  - Gate the URL via `IMAGE_ENCODER_ENDPOINT`, defaulting to `<NEXT_PUBLIC_SITE_URL>/api/encode-webp` for production.
 
 - **Generated Images**
-  - After AI generation completes, download the stored blob, compute dimensions (and optional blur) server-side (Node `sharp` unavailable—use `createImageBitmap` via `canvas`? or reuse existing client helper via action).  
-  - Persist metadata on generated doc before marking status `completed`. This prevents assuming original dimensions match the output.
+  - After AI generation completes, post Gemini’s base64 output to the encoder route (rather than running image tooling inside Convex).  
+  - Persist metadata on the generated doc before marking status `completed`. This prevents assuming original dimensions match the output.
 
 - **Frontend Consumers**
   - Update components (`ImageModal`, `PublicGallery`, `HeroGalleryDemo`, `ImageWithFallback`, share page) to:
@@ -62,7 +66,7 @@ Transform the upload pipeline so every user-provided asset is stored in Convex a
 |-------|-------|-----------|---------|
 | **Phase 1 – Client Prep Upgrade** | `lib/imagePrep.ts`, uploader in `app/page.tsx` | Implement WebP conversion/compression, metadata extraction, blur generation; adjust upload flow to pass metadata; tune quality/dimension caps. | Smaller upload payloads, metadata ready for backend. |
 | **Phase 2 – Backend Schema & Mutation** | `convex/schema.ts`, `convex/images.ts`, `convex/lib/images.ts` | Add metadata fields & validators; allow `image/webp`; persist metadata; propagate via helpers. | Schema migration complete, API returns metadata. |
-| **Phase 3 – Generated Asset Metadata** | Convex generate pipeline (`generate.ts`, storage helpers) | After AI job, recompute WebP metadata and update doc; consider generating blur placeholder in action. | Consistent metadata for originals and derivatives. |
+| **Phase 3 – Generated Asset Metadata** | Convex generate pipeline (`generate.ts`, storage helpers) | After AI job, recompute metadata and update doc; consider generating blur placeholder in action. | Consistent metadata for originals and derivatives. |
 | **Phase 4 – Frontend Consumers & UX** | Image components/modals/galleries/share pages | Use new metadata for `width`/`height`, `placeholder`, fallback logic; ensure `ImageWithFallback` handles `blurDataUrl`. | Optimized rendering, fewer transformation variants. |
 | **Phase 5 – Documentation & Verification** | Agent guides, docs, QA | Update `app/AGENTS.md`, `components/AGENTS.md`, `convex/AGENTS.md`; run lint/build; manual end-to-end tests; monitor Vercel dashboard post-deploy. | Documented patterns, validated pipeline, measurable improvements. |
 
@@ -82,7 +86,7 @@ Transform the upload pipeline so every user-provided asset is stored in Convex a
 > **Verification checklist for implementers**
 > - Upload different formats (JPEG, PNG, HEIC) and confirm Convex stores WebP masters with accurate `contentType`, `originalWidth`, `originalHeight`, and optional `placeholderBlurDataUrl`.
 > - Ensure `useQuery`-driven components (gallery, modals, share page) automatically reflect new metadata and render without Next.js image warnings.
-> - Confirm generated images receive recomputed metadata after the background job completes.
+> - Confirm generated images receive recomputed metadata after the background job completes. If `@squoosh/lib` remains incompatible with Convex push due to WASM fetch restrictions, choose an alternate transcoding strategy (pre-encode on the client, invoke an external worker, or adopt a different Node-friendly encoder) before marking this item complete.
 > - Measure Vercel Observability (transformations, cache write units) before/after to validate the optimization.
 
 ## Testing & Verification
@@ -99,7 +103,8 @@ Transform the upload pipeline so every user-provided asset is stored in Convex a
 - Continue validating content type and file size before credit consumption.  
 - Ensure blur placeholder generation does not expose raw image data in logs.  
 - Persist only necessary metadata (no EXIF).  
-- Maintain existing auth checks around upload mutations and AI generation jobs.
+- Maintain existing auth checks around upload mutations and AI generation jobs.  
+- Avoid bundling Node actions with libraries that load WASM via bare file paths unless a proven workaround exists in Convex; otherwise use alternative codecs or service boundaries.
 
 ## Notes & Decisions
 - JPEG fallback is intentionally skipped; audience uses modern browsers (2025 baseline).  

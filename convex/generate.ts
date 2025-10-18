@@ -1,14 +1,11 @@
 "use node";
 
 import { GoogleGenAI } from "@google/genai";
-import imageSize from "image-size";
-import { ImagePool } from "@squoosh/lib";
 import { v } from "convex/values";
-import { readFile } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
+import imageSize from "image-size";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, internalQuery, mutation } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -23,195 +20,24 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * Helper function to convert base64 to Uint8Array (Convex-compatible)
- */
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(new ArrayBuffer(binaryString.length));
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-let fetchPatchedForLocalFiles = false;
-function ensureFetchHandlesLocalFiles() {
-  if (fetchPatchedForLocalFiles) return;
-  const originalFetch = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-    try {
-      const urlString =
-        typeof input === "string"
-          ? input
-          : input instanceof URL
-            ? input.href
-            : typeof (input as Request).url === "string"
-              ? (input as Request).url
-              : null;
-
-      if (urlString) {
-        if (urlString.startsWith("file://")) {
-          const path = fileURLToPath(urlString);
-          const data = await readFile(path);
-          return new Response(new Uint8Array(data));
-        }
-        if (urlString.startsWith("/")) {
-          const data = await readFile(urlString);
-          return new Response(new Uint8Array(data));
-        }
-      }
-    } catch (err) {
-      console.warn("[generateImage] Local fetch fallback failed", err);
-      // fall through to original fetch
-    }
-    return originalFetch(input, init);
-  };
-  fetchPatchedForLocalFiles = true;
-}
-
-/**
  * Generate decorated image using Google's Gemini 2.5 Flash model
  * This is now an internal action that can be scheduled
  */
 /**
  * Update image generation status
  */
-export const updateImageStatus = mutation({
-  args: {
-    imageId: v.id("images"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("processing"),
-      v.literal("completed"),
-      v.literal("failed")
-    ),
-    error: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { imageId, status, error } = args;
-
-    const existing = await ctx.db.get(imageId);
-    if (!existing) {
-      return null;
-    }
-
-    const updateData: {
-      generationStatus: "pending" | "processing" | "completed" | "failed";
-      generationError?: string;
-    } = { generationStatus: status };
-    if (error) {
-      updateData.generationError = error;
-    }
-
-    await ctx.db.patch(imageId, updateData);
-    return null;
-  },
-});
+// moved to images.ts
 
 /**
  * Save generated image
  */
-export const saveGeneratedImage = mutation({
-  args: {
-    storageId: v.id("_storage"),
-    originalImageId: v.id("images"),
-    contentType: v.optional(v.string()),
-    width: v.optional(v.number()),
-    height: v.optional(v.number()),
-    placeholderBlurDataUrl: v.optional(v.string()),
-    sizeBytes: v.optional(v.number()),
-  },
-  returns: v.union(v.id("images"), v.null()),
-  handler: async (ctx, args) => {
-    const { storageId, originalImageId, contentType, width, height, placeholderBlurDataUrl, sizeBytes } = args;
-    const originalImage = await ctx.db.get(originalImageId);
-    if (!originalImage) {
-      try {
-        await ctx.storage.delete(storageId);
-      } catch (error) {
-        console.warn("[saveGeneratedImage] Failed to delete orphaned storage", {
-          storageId,
-          error,
-        });
-      }
-      return null;
-    }
-
-    const sanitizedWidth =
-      typeof width === "number" && Number.isFinite(width) ? Math.max(1, Math.round(width)) : undefined;
-    const sanitizedHeight =
-      typeof height === "number" && Number.isFinite(height) ? Math.max(1, Math.round(height)) : undefined;
-    const sanitizedPlaceholder =
-      placeholderBlurDataUrl && placeholderBlurDataUrl.length <= 10_000 ? placeholderBlurDataUrl : undefined;
-    const sanitizedSize =
-      typeof sizeBytes === "number" && Number.isFinite(sizeBytes) ? Math.max(0, Math.round(sizeBytes)) : undefined;
-
-    const generatedImageId = await ctx.db.insert("images", {
-      body: storageId,
-      createdAt: Date.now(),
-      isGenerated: true,
-      originalImageId: originalImageId,
-      userId: originalImage.userId,
-      sharingEnabled: originalImage.sharingEnabled,
-      shareExpiresAt: originalImage.shareExpiresAt,
-      contentType,
-      originalWidth: sanitizedWidth,
-      originalHeight: sanitizedHeight,
-      placeholderBlurDataUrl: sanitizedPlaceholder,
-      originalSizeBytes: sanitizedSize,
-    });
-    return generatedImageId;
-  },
-});
+// moved to images.ts
 
 // Auto-retry once when generation fails.
-export const maybeRetryOnce = mutation({
-  args: { imageId: v.id("images") },
-  returns: v.boolean(),
-  handler: async (ctx, { imageId }) => {
-    const img = await ctx.db.get(imageId);
-    if (!img || img.isGenerated) return false;
-    const attempts = (img.generationAttempts ?? 0) + 1;
-    await ctx.db.patch(imageId, { generationAttempts: attempts });
-    if (attempts <= 1) {
-      // Reset to pending and clear error before retry
-      await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-      const storageId = img.body as unknown as Id<"_storage">;
-      const meta = await ctx.db.system.get(storageId);
-      const contentType: string | undefined = (meta as { contentType?: string } | null)
-        ?.contentType;
-      await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
-        storageId,
-        originalImageId: imageId,
-        contentType,
-      });
-      return true;
-    }
-    return false;
-  },
-});
+// moved to images.ts
 
 // Manual retry from UI
-export const retryOriginal = mutation({
-  args: { imageId: v.id("images") },
-  returns: v.null(),
-  handler: async (ctx, { imageId }) => {
-    const img = await ctx.db.get(imageId);
-    if (!img || img.isGenerated) return null;
-    // Reset status and error; do not modify attempts here (manual retries not limited)
-    await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-    const storageId = img.body as unknown as Id<"_storage">;
-    const meta = await ctx.db.system.get(storageId);
-    const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
-    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
-      storageId,
-      originalImageId: imageId,
-      contentType,
-    });
-    return null;
-  },
-});
+// moved to images.ts
 
 export const generateImage = internalAction({
   args: {
@@ -234,7 +60,7 @@ export const generateImage = internalAction({
       }
 
       // Mark the original image as being processed
-      await ctx.runMutation(api.generate.updateImageStatus, {
+      await ctx.runMutation(api.images.updateImageStatus, {
         imageId: originalImageId,
         status: "processing",
       });
@@ -245,7 +71,7 @@ export const generateImage = internalAction({
         console.log(
           `[generateImage] Storage missing for originalImageId ${originalImageId}; skipping generation.`
         );
-        await ctx.runMutation(api.generate.updateImageStatus, {
+        await ctx.runMutation(api.images.updateImageStatus, {
           imageId: originalImageId,
           status: "failed",
           error: "Original image no longer available",
@@ -333,35 +159,49 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       }
 
       // Convert base64 to Uint8Array and attempt WebP transcoding for storage
-      const imageBuffer = base64ToUint8Array(b64Out);
-      let encodedBuffer: Uint8Array = imageBuffer;
-      let outputContentType: string = "image/png";
+      const encoderEndpoint =
+        process.env.IMAGE_ENCODER_ENDPOINT ||
+        (process.env.NEXT_PUBLIC_SITE_URL
+          ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/$/, "")}/api/encode-webp`
+          : null);
 
-      let pool: ImagePool | undefined;
-      try {
-        ensureFetchHandlesLocalFiles();
-        ensureFetchHandlesLocalFiles();
-        pool = new ImagePool(1);
-        const image = pool.ingestImage(Buffer.from(imageBuffer));
-        await image.encode({
-          webp: {
-            quality: 80,
-          },
-        });
-        const webpResult = await image.encodedWith.webp;
-        if (webpResult?.binary) {
-          encodedBuffer = webpResult.binary;
-          outputContentType = "image/webp";
-        }
-      } catch (encodeError) {
-        console.warn("[generateImage] Failed to transcode generated image to WebP", encodeError);
-        encodedBuffer = imageBuffer;
-        outputContentType = mimeType || "image/png";
-      } finally {
-        await pool?.close();
+      if (!encoderEndpoint) {
+        throw new Error("Image encoder endpoint not configured");
       }
 
-      const imageBlob = new Blob([encodedBuffer as BlobPart], { type: outputContentType });
+      const encoderResponse = await fetch(encoderEndpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          inputBase64: b64Out,
+          mimeType,
+          quality: 80,
+          includePlaceholder: true,
+        }),
+      });
+
+      if (!encoderResponse.ok) {
+        const text = await encoderResponse.text();
+        throw new Error(
+          `Image encoder failed (${encoderResponse.status}): ${
+            text?.slice(0, 200) || encoderResponse.statusText
+          }`
+        );
+      }
+
+      const encoderResult: {
+        encodedBase64: string;
+        contentType: string;
+        width: number | null;
+        height: number | null;
+        sizeBytes: number;
+        placeholderBlurDataUrl?: string;
+      } = await encoderResponse.json();
+
+      const encodedBuffer = Buffer.from(encoderResult.encodedBase64, "base64");
+      const outputContentType = encoderResult.contentType || mimeType || "image/png";
+
+      const imageBlob = new Blob([encodedBuffer], { type: outputContentType });
       const generatedStorageId = await ctx.storage.store(imageBlob);
 
       // Verify the generated image was stored properly
@@ -370,28 +210,43 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Failed to get storage URL after upload");
       }
 
-      const dimensions = imageSize(Buffer.from(encodedBuffer));
-      const width = typeof dimensions.width === "number" ? dimensions.width : undefined;
-      const height = typeof dimensions.height === "number" ? dimensions.height : undefined;
-      const detectedType = dimensions.type;
-      const normalizedType = detectedType === "jpg" ? "jpeg" : detectedType;
-      const generatedContentType = normalizedType
-        ? `image/${normalizedType}`
-        : imageBlob.type || outputContentType || mimeType || "image/png";
-      const sizeBytes = encodedBuffer.byteLength;
+      let fallbackDimensions: ReturnType<typeof imageSize> | null = null;
+      const getDimensions = () => {
+        if (!fallbackDimensions) {
+          fallbackDimensions = imageSize(encodedBuffer);
+        }
+        return fallbackDimensions;
+      };
+
+      const width =
+        typeof encoderResult.width === "number"
+          ? encoderResult.width
+          : (() => {
+              const dimensions = getDimensions();
+              return typeof dimensions.width === "number" ? dimensions.width : undefined;
+            })();
+      const height =
+        typeof encoderResult.height === "number"
+          ? encoderResult.height
+          : (() => {
+              const dimensions = getDimensions();
+              return typeof dimensions.height === "number" ? dimensions.height : undefined;
+            })();
+      const sizeBytes = encoderResult.sizeBytes ?? encodedBuffer.byteLength;
 
       // Save the generated image record
-      await ctx.runMutation(api.generate.saveGeneratedImage, {
+      await ctx.runMutation(api.images.saveGeneratedImage, {
         storageId: generatedStorageId,
         originalImageId: originalImageId,
-        contentType: generatedContentType,
+        contentType: outputContentType,
         width,
         height,
         sizeBytes,
+        placeholderBlurDataUrl: encoderResult.placeholderBlurDataUrl,
       });
 
       // Mark the original image as completed
-      await ctx.runMutation(api.generate.updateImageStatus, {
+      await ctx.runMutation(api.images.updateImageStatus, {
         imageId: originalImageId,
         status: "completed",
       });
@@ -407,18 +262,19 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         error instanceof Error ? error.message : "Unknown error occurred during generation";
 
       try {
-        await ctx.runMutation(api.generate.updateImageStatus, {
+        await ctx.runMutation(api.images.updateImageStatus, {
           imageId: originalImageId,
           status: "failed",
           error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
-        
+
         // Attempt to refund credits for the failed generation
         try {
-          const originalImage = await ctx.runQuery(internal.generate.getImageById, { 
-            imageId: originalImageId 
-          });
+          const originalImage: { _id: Id<"images">; userId?: string } | null = await ctx.runQuery(
+            internal.images.getImageUserForRefund,
+            { imageId: originalImageId }
+          );
           if (originalImage?.userId) {
             const refundResult = await ctx.runMutation(api.users.refundCreditsForFailedGeneration, {
               userId: originalImage.userId,
@@ -426,7 +282,9 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
               reason: errorMessage,
             });
             if (refundResult.refunded) {
-              console.log(`[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`);
+              console.log(
+                `[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`
+              );
             }
           }
         } catch (refundError) {
@@ -449,7 +307,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 
       if (shouldRetry) {
         try {
-          const retried = await ctx.runMutation(api.generate.maybeRetryOnce, {
+          const retried = await ctx.runMutation(api.images.maybeRetryOnce, {
             imageId: originalImageId,
           });
           if (retried) {
@@ -472,21 +330,4 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 /**
  * Internal query to get image by ID (for refund functionality)
  */
-export const getImageById = internalQuery({
-  args: { imageId: v.id("images") },
-  returns: v.union(
-    v.object({
-      _id: v.id("images"),
-      userId: v.optional(v.string()),
-    }),
-    v.null()
-  ),
-  handler: async (ctx, { imageId }) => {
-    const image = await ctx.db.get(imageId);
-    if (!image) return null;
-    return {
-      _id: image._id,
-      userId: image.userId,
-    };
-  },
-});
+// moved to images.ts

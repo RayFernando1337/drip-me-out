@@ -51,7 +51,7 @@ export default function Home() {
 function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
-  const retryOriginalMutation = useMutation(api.generate.retryOriginal);
+  const retryOriginalMutation = useMutation(api.images.retryOriginal);
   const userCreditsData = useQuery(api.users.getCurrentUserCredits);
 
   // Initialize user record on first sign-in to grant initial credits

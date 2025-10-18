@@ -138,7 +138,12 @@ export default function HeroGalleryDemo() {
             {/* Right Column: Hero Image + Gallery Dock */}
             <div className="space-y-6">
               {/* Large Hero Image */}
-              <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl bg-muted/20">
+              <div
+                className="relative w-full rounded-3xl overflow-hidden shadow-2xl bg-muted/20"
+                style={{
+                  aspectRatio: `${allImages[safeSelectedIndex]?.width ?? 1024} / ${allImages[safeSelectedIndex]?.height ?? 1024}`,
+                }}
+              >
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={safeSelectedIndex}
@@ -146,13 +151,14 @@ export default function HeroGalleryDemo() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.05 }}
                     transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="relative w-full h-full"
+                    className="relative h-full w-full"
                   >
                     <ImageWithFallback
                       src={allImages[safeSelectedIndex].url}
                       alt="Featured anime transformation"
-                      fill
-                      className="object-cover"
+                      width={allImages[safeSelectedIndex].width ?? 1024}
+                      height={allImages[safeSelectedIndex].height ?? 1024}
+                      className="h-full w-full object-cover"
                       sizes="(max-width: 768px) 100vw, 50vw"
                       priority={true}
                       placeholder={allImages[safeSelectedIndex].placeholderBlurDataUrl ? "blur" : "empty"}
@@ -193,13 +199,14 @@ export default function HeroGalleryDemo() {
                           ? "ring-4 ring-primary shadow-lg scale-105"
                           : "ring-2 ring-border/30 opacity-70 hover:opacity-100"
                       }
-                    `}
+                      `}
                     >
                       <ImageWithFallback
                         src={image.url}
                         alt={`Thumbnail ${index + 1}`}
-                        fill
-                        className="object-cover"
+                        width={image.width ?? 256}
+                        height={image.height ?? 256}
+                        className="h-full w-full object-cover"
                         sizes="80px"
                         placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
                         blurDataURL={image.placeholderBlurDataUrl}
