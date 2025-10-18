@@ -44,6 +44,9 @@ export default function HeroGalleryDemo() {
         url,
         id: `fallback-${idx}`,
         isFeatured: false,
+        placeholderBlurDataUrl: undefined,
+        width: undefined,
+        height: undefined,
       }));
     }
     // Return empty array while loading (prevents flash of fallback images)
