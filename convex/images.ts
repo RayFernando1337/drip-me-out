@@ -514,17 +514,12 @@ export const getGalleryImagesPaginated = query({
       .order("desc")
       .paginate(adjustedPaginationOpts);
 
-    // Efficiently filter for gallery items (avoid expensive operations)
+    // Only show AI-generated images (not originals)
+    // Future: Add side-by-side comparison feature for originals
     const galleryImages: typeof result.page = [];
 
     for (const img of result.page) {
       if (img.isGenerated === true) {
-        galleryImages.push(img);
-        continue;
-      }
-      const status = img.generationStatus;
-      // Show original images that are pending, processing, OR completed
-      if (status === "pending" || status === "processing" || status === "completed") {
         galleryImages.push(img);
       }
     }

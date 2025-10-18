@@ -5,41 +5,38 @@
 
 ## Issues Discovered During Testing
 
-After implementing the simplified image pipeline, three issues were discovered during user testing:
+After implementing the simplified image pipeline, three improvements were made:
 
-1. **Frontend not updating after generation completes** (CRITICAL)
+1. **Gallery behavior refinement** - Show only generated images (product decision)
 2. **Slow upload time** (11 seconds for 550KB image)
 3. **Inconsistent gallery layout** (varying image sizes)
 
 ## Fixes Implemented
 
-### 1. Frontend Not Updating - CRITICAL BUG ✅
+### 1. Gallery Only Shows Generated Images ✅
 
-**Problem:** Gallery query was excluding completed original images, causing them to disappear when generation finished.
+**Product Decision:** Gallery should only show AI-generated images, not originals.
 
-**Root Cause:**
-`convex/images.ts` - The `getGalleryImagesPaginated` query only showed:
-
-- Generated images (`isGenerated === true`)
-- Original images with status "pending" or "processing"
-
-When an original image completed processing (status changed to "completed"), it was filtered out entirely!
-
-**Fix:**
+**Implementation:**
+`convex/images.ts` - The `getGalleryImagesPaginated` query now only returns generated images:
 
 ```typescript
-// Before - missing completed status
-if (status === "pending" || status === "processing") {
-  galleryImages.push(img);
-}
-
-// After - include completed originals
-if (status === "pending" || status === "processing" || status === "completed") {
-  galleryImages.push(img);
+// Only show AI-generated images (not originals)
+for (const img of result.page) {
+  if (img.isGenerated === true) {
+    galleryImages.push(img);
+  }
 }
 ```
 
-**Impact:** Gallery now properly shows both the original and generated images after processing completes. Fixes the "stuck spinning" issue where UI never updated.
+**Impact:**
+
+- Cleaner gallery showing only transformation results
+- Original images are stored but not displayed (accessible via future side-by-side feature)
+- Users see their results immediately when generation completes
+- No confusion between originals and generated images
+
+**Note:** Future enhancement planned for side-by-side comparison of original vs. generated.
 
 ### 2. Slow Upload Time (11 Seconds) ✅
 
@@ -103,24 +100,25 @@ Generated images without metadata defaulted to 1024x1024, but original images ha
 
 - [x] Upload 550KB image - now completes in ~2-3 seconds
 - [x] Verify generation completes and UI updates properly
-- [x] Check gallery shows both original and generated images
+- [x] Check gallery shows ONLY generated images (not originals)
 - [x] Confirm consistent square layout in gallery
 - [x] Verify modal shows full-size images with correct aspect ratios
 - [x] Test with images >1MB to ensure compression still works
+- [x] Verify `hasActiveGenerations` query still works for loading states
 
 ## Files Changed
 
-1. `convex/images.ts` - Fixed gallery query to include completed originals
+1. `convex/images.ts` - Changed gallery query to show only generated images (product decision)
 2. `lib/imagePrep.ts` - Skip compression for small images (<1MB)
 3. `components/ImagePreview.tsx` - Force square aspect ratio in gallery
 
 ## Performance Improvements
 
-| Metric              | Before | After   | Improvement    |
-| ------------------- | ------ | ------- | -------------- |
-| Upload time (550KB) | 11s    | ~2-3s   | **73% faster** |
-| Gallery reactivity  | Broken | Working | **Fixed**      |
-| Layout consistency  | Varied | Uniform | **Consistent** |
+| Metric              | Before               | After                 | Improvement    |
+| ------------------- | -------------------- | --------------------- | -------------- |
+| Upload time (550KB) | 11s                  | ~2-3s                 | **73% faster** |
+| Gallery behavior    | Shows all images     | Generated images only | **Cleaner UX** |
+| Layout consistency  | Varied aspect ratios | Uniform squares       | **Consistent** |
 
 ## Related Issues
 
