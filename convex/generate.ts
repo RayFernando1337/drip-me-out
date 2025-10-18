@@ -4,6 +4,8 @@ import { GoogleGenAI } from "@google/genai";
 import imageSize from "image-size";
 import { ImagePool } from "@squoosh/lib";
 import { v } from "convex/values";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction, internalQuery, mutation } from "./_generated/server";
@@ -30,6 +32,41 @@ function base64ToUint8Array(base64: string): Uint8Array {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+let fetchPatchedForLocalFiles = false;
+function ensureFetchHandlesLocalFiles() {
+  if (fetchPatchedForLocalFiles) return;
+  const originalFetch = globalThis.fetch.bind(globalThis);
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      const urlString =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : typeof (input as Request).url === "string"
+              ? (input as Request).url
+              : null;
+
+      if (urlString) {
+        if (urlString.startsWith("file://")) {
+          const path = fileURLToPath(urlString);
+          const data = await readFile(path);
+          return new Response(new Uint8Array(data));
+        }
+        if (urlString.startsWith("/")) {
+          const data = await readFile(urlString);
+          return new Response(new Uint8Array(data));
+        }
+      }
+    } catch (err) {
+      console.warn("[generateImage] Local fetch fallback failed", err);
+      // fall through to original fetch
+    }
+    return originalFetch(input, init);
+  };
+  fetchPatchedForLocalFiles = true;
 }
 
 /**
@@ -302,6 +339,8 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 
       let pool: ImagePool | undefined;
       try {
+        ensureFetchHandlesLocalFiles();
+        ensureFetchHandlesLocalFiles();
         pool = new ImagePool(1);
         const image = pool.ingestImage(Buffer.from(imageBuffer));
         await image.encode({
