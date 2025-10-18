@@ -33,9 +33,9 @@ import {
   Share2,
   Trash2,
 } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ImageWithFallback } from "./ui/ImageWithFallback";
 
 // Infer the type from the actual query return type
 type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
@@ -258,13 +258,15 @@ export default function ImageModal({
         <div className="flex h-full flex-col md:max-h-[90vh] md:flex-row">
           <div className="relative flex-1 bg-black/5">
             <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
-              <Image
+              <ImageWithFallback
                 src={currentImage.url}
                 alt="Full size image"
                 fill
                 className="object-contain"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
                 priority={true}
+                placeholder={currentImage.placeholderBlurDataUrl ? "blur" : "empty"}
+                blurDataURL={currentImage.placeholderBlurDataUrl}
               />
 
               {/* Navigation buttons (only when navigation is enabled) */}

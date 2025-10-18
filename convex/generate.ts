@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import imageSize from "image-size";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
@@ -75,10 +76,15 @@ export const saveGeneratedImage = mutation({
   args: {
     storageId: v.id("_storage"),
     originalImageId: v.id("images"),
+    contentType: v.optional(v.string()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    sizeBytes: v.optional(v.number()),
   },
   returns: v.union(v.id("images"), v.null()),
   handler: async (ctx, args) => {
-    const { storageId, originalImageId } = args;
+    const { storageId, originalImageId, contentType, width, height, placeholderBlurDataUrl, sizeBytes } = args;
     const originalImage = await ctx.db.get(originalImageId);
     if (!originalImage) {
       try {
@@ -92,6 +98,15 @@ export const saveGeneratedImage = mutation({
       return null;
     }
 
+    const sanitizedWidth =
+      typeof width === "number" && Number.isFinite(width) ? Math.max(1, Math.round(width)) : undefined;
+    const sanitizedHeight =
+      typeof height === "number" && Number.isFinite(height) ? Math.max(1, Math.round(height)) : undefined;
+    const sanitizedPlaceholder =
+      placeholderBlurDataUrl && placeholderBlurDataUrl.length <= 10_000 ? placeholderBlurDataUrl : undefined;
+    const sanitizedSize =
+      typeof sizeBytes === "number" && Number.isFinite(sizeBytes) ? Math.max(0, Math.round(sizeBytes)) : undefined;
+
     const generatedImageId = await ctx.db.insert("images", {
       body: storageId,
       createdAt: Date.now(),
@@ -100,6 +115,11 @@ export const saveGeneratedImage = mutation({
       userId: originalImage.userId,
       sharingEnabled: originalImage.sharingEnabled,
       shareExpiresAt: originalImage.shareExpiresAt,
+      contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      placeholderBlurDataUrl: sanitizedPlaceholder,
+      originalSizeBytes: sanitizedSize,
     });
     return generatedImageId;
   },
@@ -283,10 +303,24 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Failed to get storage URL after upload");
       }
 
+      const dimensions = imageSize(imageBuffer);
+      const width = typeof dimensions.width === "number" ? dimensions.width : undefined;
+      const height = typeof dimensions.height === "number" ? dimensions.height : undefined;
+      const detectedType = dimensions.type;
+      const normalizedType = detectedType === "jpg" ? "jpeg" : detectedType;
+      const generatedContentType = normalizedType
+        ? `image/${normalizedType}`
+        : imageBlob.type || mimeType || "image/png";
+      const sizeBytes = imageBuffer.byteLength;
+
       // Save the generated image record
       await ctx.runMutation(api.generate.saveGeneratedImage, {
         storageId: generatedStorageId,
         originalImageId: originalImageId,
+        contentType: generatedContentType,
+        width,
+        height,
+        sizeBytes,
       });
 
       // Mark the original image as completed

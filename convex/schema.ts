@@ -7,6 +7,11 @@ export default defineSchema({
     createdAt: v.number(),
     isGenerated: v.optional(v.boolean()),
     originalImageId: v.optional(v.id("images")), // Reference to original image
+    contentType: v.optional(v.string()),
+    originalWidth: v.optional(v.number()),
+    originalHeight: v.optional(v.number()),
+    originalSizeBytes: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
     generationStatus: v.optional(
       v.union(
         v.literal("pending"),

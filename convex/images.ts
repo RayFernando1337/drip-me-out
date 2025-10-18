@@ -19,10 +19,15 @@ export const generateUploadUrl = mutation({
 export const uploadAndScheduleGeneration = mutation({
   args: {
     storageId: v.id("_storage"),
+    originalWidth: v.number(),
+    originalHeight: v.number(),
+    contentType: v.string(),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    originalSizeBytes: v.optional(v.number()),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
-    const { storageId } = args;
+    const { storageId, originalWidth, originalHeight, contentType: declaredContentType } = args;
 
     // Require authentication
     const identity = await requireIdentity(ctx);
@@ -40,16 +45,42 @@ export const uploadAndScheduleGeneration = mutation({
     const meta = await ctx.db.system.get(storageId);
     if (!meta) throw new Error("VALIDATION: Missing storage metadata");
 
-    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
-    const contentType: string | undefined = (meta as { contentType?: string }).contentType;
+    const allowed = new Set(["image/webp", "image/jpeg", "image/png", "image/heic", "image/heif"]);
+    const storageContentType: string | undefined = (meta as { contentType?: string }).contentType;
     const size: number | undefined = (meta as { size?: number }).size;
 
-    if (!contentType || !allowed.has(contentType)) {
+    if (!storageContentType || !allowed.has(storageContentType)) {
       throw new Error("VALIDATION: Unsupported content type");
     }
-    if (typeof size === "number" && size > 5 * 1024 * 1024) {
-      throw new Error("VALIDATION: File exceeds 5 MB limit");
+    if (typeof size === "number" && size > 3 * 1024 * 1024) {
+      throw new Error("VALIDATION: File exceeds 3 MB limit");
     }
+
+    if (storageContentType !== declaredContentType) {
+      console.warn("[uploadAndScheduleGeneration] Content type mismatch", {
+        storageContentType,
+        declaredContentType,
+        storageId,
+      });
+    }
+
+    const sanitizedWidth = Number.isFinite(originalWidth) ? Math.max(1, Math.round(originalWidth)) : null;
+    const sanitizedHeight = Number.isFinite(originalHeight) ? Math.max(1, Math.round(originalHeight)) : null;
+    if (!sanitizedWidth || !sanitizedHeight) {
+      throw new Error("VALIDATION: Invalid image dimensions");
+    }
+
+    const placeholderBlurDataUrl = args.placeholderBlurDataUrl?.length ? args.placeholderBlurDataUrl : undefined;
+    if (placeholderBlurDataUrl && placeholderBlurDataUrl.length > 10_000) {
+      throw new Error("VALIDATION: Blur placeholder too large");
+    }
+
+    const originalSizeBytes =
+      typeof size === "number" ? size : args.originalSizeBytes && Number.isFinite(args.originalSizeBytes)
+        ? Math.max(0, Math.round(args.originalSizeBytes))
+        : undefined;
+
+    const contentType = storageContentType;
 
     // Atomically decrement credits BEFORE scheduling generation
     await ctx.db.patch(user._id, {
@@ -68,6 +99,11 @@ export const uploadAndScheduleGeneration = mutation({
       userId,
       isFeatured: false,
       isDisabledByAdmin: false,
+      contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      originalSizeBytes,
+      placeholderBlurDataUrl,
     });
 
     // Schedule the image generation immediately
@@ -149,14 +185,41 @@ export const sendImage = mutation({
     storageId: v.id("_storage"),
     isGenerated: v.optional(v.boolean()),
     originalImageId: v.optional(v.id("images")),
+    contentType: v.optional(v.string()),
+    originalWidth: v.optional(v.number()),
+    originalHeight: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    originalSizeBytes: v.optional(v.number()),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
+    const sanitizedWidth =
+      typeof args.originalWidth === "number" && Number.isFinite(args.originalWidth)
+        ? Math.max(1, Math.round(args.originalWidth))
+        : undefined;
+    const sanitizedHeight =
+      typeof args.originalHeight === "number" && Number.isFinite(args.originalHeight)
+        ? Math.max(1, Math.round(args.originalHeight))
+        : undefined;
+    const sanitizedPlaceholder =
+      args.placeholderBlurDataUrl && args.placeholderBlurDataUrl.length <= 10_000
+        ? args.placeholderBlurDataUrl
+        : undefined;
+    const sanitizedSize =
+      typeof args.originalSizeBytes === "number" && Number.isFinite(args.originalSizeBytes)
+        ? Math.max(0, Math.round(args.originalSizeBytes))
+        : undefined;
+
     return await ctx.db.insert("images", {
       body: args.storageId,
       createdAt: Date.now(),
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
+      contentType: args.contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      placeholderBlurDataUrl: sanitizedPlaceholder,
+      originalSizeBytes: sanitizedSize,
     });
   },
 });
@@ -257,6 +320,11 @@ export const getGalleryImages = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -394,6 +462,11 @@ export const getGalleryImagesPaginated = query({
         createdAt: v.number(),
         isGenerated: v.optional(v.boolean()),
         originalImageId: v.optional(v.id("images")),
+        contentType: v.optional(v.string()),
+        originalWidth: v.optional(v.number()),
+        originalHeight: v.optional(v.number()),
+        originalSizeBytes: v.optional(v.number()),
+        placeholderBlurDataUrl: v.optional(v.string()),
         generationStatus: v.optional(
           v.union(
             v.literal("pending"),
@@ -514,6 +587,11 @@ export const getImages = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -579,6 +657,11 @@ export const getImageById = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),

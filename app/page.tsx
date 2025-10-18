@@ -229,7 +229,14 @@ function Content() {
       try {
         // Prepare image (HEIC->JPEG, compress to <=5MB)
         const { prepareImageForUpload } = await import("@/lib/imagePrep");
-        const { file: prepared } = await prepareImageForUpload(file);
+        const {
+          file: preparedFile,
+          width: originalWidth,
+          height: originalHeight,
+          contentType,
+          placeholderBlurDataUrl,
+          sizeBytes,
+        } = await prepareImageForUpload(file);
         setIsPreparing(false);
 
         setIsUploading(true);
@@ -244,12 +251,12 @@ function Content() {
             const uploadUrl = await generateUploadUrl();
 
             // Only use keepalive for small files (< 64KB limit in Safari)
-            const useKeepAlive = prepared.size < 64 * 1024;
+            const useKeepAlive = preparedFile.size < 64 * 1024;
 
             const response = await fetch(uploadUrl, {
               method: "POST",
-              headers: { "Content-Type": prepared.type },
-              body: prepared,
+              headers: { "Content-Type": contentType },
+              body: preparedFile,
               ...(useKeepAlive && { keepalive: true }),
             });
 
@@ -260,7 +267,14 @@ function Content() {
             const { storageId } = await response.json();
 
             // Schedule generation using the consolidated backend mutation
-            await uploadAndScheduleGeneration({ storageId });
+            await uploadAndScheduleGeneration({
+              storageId,
+              originalWidth,
+              originalHeight,
+              contentType,
+              placeholderBlurDataUrl,
+              originalSizeBytes: sizeBytes,
+            });
 
             // Show credit usage feedback with updated balance
             const remainingCredits = Math.max(0, (userCredits?.credits || 0) - 1);

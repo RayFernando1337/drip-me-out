@@ -33,6 +33,9 @@ export default function HeroGalleryDemo() {
         url: img.url,
         id: img._id,
         isFeatured: true,
+        placeholderBlurDataUrl: img.placeholderBlurDataUrl,
+        width: img.originalWidth,
+        height: img.originalHeight,
       }));
     }
     // Only show fallback images if query has completed and returned empty
@@ -149,6 +152,8 @@ export default function HeroGalleryDemo() {
                       className="object-cover"
                       sizes="(max-width: 768px) 100vw, 50vw"
                       priority={true}
+                      placeholder={allImages[safeSelectedIndex].placeholderBlurDataUrl ? "blur" : "empty"}
+                      blurDataURL={allImages[safeSelectedIndex].placeholderBlurDataUrl}
                     />
                   </motion.div>
                 </AnimatePresence>
@@ -193,6 +198,8 @@ export default function HeroGalleryDemo() {
                         fill
                         className="object-cover"
                         sizes="80px"
+                        placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
+                        blurDataURL={image.placeholderBlurDataUrl}
                       />
                     </button>
                   ))}

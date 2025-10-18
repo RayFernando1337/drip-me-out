@@ -28,6 +28,7 @@
     "convex": "^1.28.0",
     "embla-carousel-react": "^8.6.0",
     "heic2any": "^0.0.4",
+    "image-size": "^2.0.2",
     "lucide-react": "^0.542.0",
     "motion": "^12.23.24",
     "next": "15.5.2",
