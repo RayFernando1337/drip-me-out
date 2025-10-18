@@ -88,7 +88,6 @@ export default function ImagePreview({
                   alt="Transformed image"
                   fill
                   className="object-cover transition-all duration-300 group-hover:scale-[1.02]"
-                  unoptimized={true}
                   sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
                 />
 

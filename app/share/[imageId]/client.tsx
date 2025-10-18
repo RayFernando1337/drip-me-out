@@ -74,7 +74,6 @@ export default function SharePageClient({ image }: SharePageClientProps) {
             height={800}
             className="w-full h-auto rounded-lg shadow-2xl"
             style={{ objectFit: "contain", maxHeight: "80vh" }}
-            unoptimized={true}
             priority={true}
           />
         </div>

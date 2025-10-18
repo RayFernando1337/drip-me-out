@@ -1,10 +1,6 @@
 'use client';
 
-import type {
-  ComponentProps,
-  HTMLAttributes,
-  VideoHTMLAttributes,
-} from 'react';
+import type { ComponentProps, HTMLAttributes, VideoHTMLAttributes } from 'react';
 import { useEffect, useRef } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -12,6 +8,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from '@/components/ui/carousel';
+import { ImageWithFallback, type ImageWithFallbackProps } from '@/components/ui/ImageWithFallback';
 import { cn } from '@/lib/utils';
 
 export type StoriesProps = ComponentProps<typeof Carousel>;
@@ -127,13 +124,12 @@ export const StoryVideo = ({ className, ...props }: StoryVideoProps) => {
   );
 };
 
-export type StoryImageProps = ComponentProps<'img'> & {
+export type StoryImageProps = Omit<ImageWithFallbackProps, 'alt'> & {
   alt: string;
 };
 
-export const StoryImage = ({ className, alt, ...props }: StoryImageProps) => (
-  // biome-ignore lint/performance/noImgElement: "Kibo UI is framework agnostic"
-  <img
+export const StoryImage = ({ className, alt, sizes, ...props }: StoryImageProps) => (
+  <ImageWithFallback
     alt={alt}
     className={cn(
       'absolute inset-0 h-full w-full object-cover',
@@ -141,7 +137,9 @@ export const StoryImage = ({ className, alt, ...props }: StoryImageProps) => (
       'group-hover:opacity-90',
       className
     )}
+    sizes={sizes ?? '(max-width: 768px) 75vw, 320px'}
     {...props}
+    fill
   />
 );
 

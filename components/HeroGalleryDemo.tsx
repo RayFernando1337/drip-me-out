@@ -147,7 +147,6 @@ export default function HeroGalleryDemo() {
                       alt="Featured anime transformation"
                       fill
                       className="object-cover"
-                      unoptimized={true}
                       sizes="(max-width: 768px) 100vw, 50vw"
                       priority={true}
                     />
@@ -193,7 +192,6 @@ export default function HeroGalleryDemo() {
                         alt={`Thumbnail ${index + 1}`}
                         fill
                         className="object-cover"
-                        unoptimized={true}
                         sizes="80px"
                       />
                     </button>

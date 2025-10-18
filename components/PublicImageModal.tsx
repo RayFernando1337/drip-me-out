@@ -55,10 +55,9 @@ function PublicImageModal({ image, isOpen, onClose }: PublicImageModalProps) {
                 fill
                 className="object-contain"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
-                unoptimized={true}
                 priority={false}
                 onError={(event) => {
-                  const target = event.target as HTMLImageElement;
+                  const target = event.currentTarget;
                   target.style.display = "none";
                   const parent = target.parentElement;
                   if (parent) {
