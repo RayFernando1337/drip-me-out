@@ -57,10 +57,11 @@ function PublicImageModal({ image, isOpen, onClose }: PublicImageModalProps) {
                 alt="Featured transformation preview"
                 width={intrinsicWidth}
                 height={intrinsicHeight}
+                priority={true} // Modal images are critical when opened
+                quality={90} // Higher quality for full-size viewing
                 className="h-auto w-full max-h-[min(60vh,420px)] md:max-h-[80vh] object-contain"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
                 style={{ width: "100%", height: "auto" }}
-                priority={false}
                 placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
                 blurDataURL={image.placeholderBlurDataUrl}
               />

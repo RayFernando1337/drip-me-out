@@ -502,10 +502,17 @@ export const getGalleryImagesPaginated = query({
   }),
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
-    // Fetch per-user, ordered by createdAt, and overfetch to account for filtering
+    console.log(
+      "[Gallery Query] Fetching for user:",
+      identity.subject,
+      "pagination:",
+      args.paginationOpts
+    );
+
+    // Fetch per-user, ordered by createdAt, with minimal overfetch for filtering
     const adjustedPaginationOpts = {
       ...args.paginationOpts,
-      numItems: Math.ceil(args.paginationOpts.numItems * 1.5),
+      numItems: Math.ceil(args.paginationOpts.numItems * 1.2), // Reduced from 1.5x to 1.2x
     };
 
     const result = await ctx.db
@@ -514,17 +521,33 @@ export const getGalleryImagesPaginated = query({
       .order("desc")
       .paginate(adjustedPaginationOpts);
 
-    // Only show AI-generated images (not originals)
-    // Future: Add side-by-side comparison feature for originals
+    console.log("[Gallery Query] Raw query returned", result.page.length, "images from DB");
+
+    // Show generated images AND processing originals for real-time feedback
+    // Hide completed originals (their generated version shows instead)
     const galleryImages: typeof result.page = [];
 
     for (const img of result.page) {
+      // Always show generated images
       if (img.isGenerated === true) {
         galleryImages.push(img);
+        console.log("[Gallery Query] Including generated image:", img._id);
+        continue;
       }
+
+      // Show originals during processing for real-time user feedback
+      const status = img.generationStatus;
+      if (status === "pending" || status === "processing") {
+        galleryImages.push(img);
+        console.log("[Gallery Query] Including processing original:", img._id, "status:", status);
+      } else if (status === "completed") {
+        console.log("[Gallery Query] Hiding completed original:", img._id);
+      }
+      // Hide completed originals (only their generated results show)
     }
 
     const trimmedGalleryImages = galleryImages.slice(0, args.paginationOpts.numItems);
+    console.log("[Gallery Query] Returning", trimmedGalleryImages.length, "images after filtering");
 
     if (trimmedGalleryImages.length === 0) {
       return {
@@ -837,6 +860,12 @@ export const saveGeneratedImage = mutation({
       placeholderBlurDataUrl: sanitizedPlaceholder,
       originalSizeBytes: sanitizedSize,
     });
+    console.log(
+      "[saveGeneratedImage] Created generated image:",
+      generatedImageId,
+      "for user:",
+      originalImage.userId
+    );
     return generatedImageId;
   },
 });

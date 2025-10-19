@@ -90,7 +90,7 @@ export default function PublicGallery() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {images.map((image) => (
+        {images.map((image, idx) => (
           <button
             key={image._id}
             type="button"
@@ -104,8 +104,11 @@ export default function PublicGallery() {
                   src={image.url}
                   alt="Anime transformation example"
                   fill
+                  priority={idx < 8} // First two rows load with priority
+                  loading={idx < 8 ? "eager" : "lazy"}
+                  quality={75} // Optimized for gallery thumbnails
                   className="object-cover transition-all duration-300 group-hover:scale-[1.02]"
-                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
+                  sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1200px) 33.33vw, 25vw"
                   placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
                   blurDataURL={image.placeholderBlurDataUrl}
                 />

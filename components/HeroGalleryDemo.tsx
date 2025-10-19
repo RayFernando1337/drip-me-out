@@ -158,10 +158,13 @@ export default function HeroGalleryDemo() {
                       alt="Featured anime transformation"
                       width={allImages[safeSelectedIndex].width ?? 1024}
                       height={allImages[safeSelectedIndex].height ?? 1024}
+                      priority={true}
+                      quality={85} // High quality for hero showcase
                       className="h-full w-full object-cover"
                       sizes="(max-width: 768px) 100vw, 50vw"
-                      priority={true}
-                      placeholder={allImages[safeSelectedIndex].placeholderBlurDataUrl ? "blur" : "empty"}
+                      placeholder={
+                        allImages[safeSelectedIndex].placeholderBlurDataUrl ? "blur" : "empty"
+                      }
                       blurDataURL={allImages[safeSelectedIndex].placeholderBlurDataUrl}
                     />
                   </motion.div>
@@ -206,6 +209,7 @@ export default function HeroGalleryDemo() {
                         alt={`Thumbnail ${index + 1}`}
                         width={image.width ?? 256}
                         height={image.height ?? 256}
+                        quality={70} // Lower quality for small thumbnails
                         className="h-full w-full object-cover"
                         sizes="80px"
                         placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}

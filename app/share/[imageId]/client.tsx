@@ -1,10 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ImageWithFallback } from "@/components/ui/ImageWithFallback";
 import { api } from "@/convex/_generated/api";
 import { FunctionReturnType } from "convex/server";
 import Link from "next/link";
-import { ImageWithFallback } from "@/components/ui/ImageWithFallback";
 
 // Use type inference from the API function for type safety
 interface SharePageClientProps {
@@ -75,9 +75,10 @@ export default function SharePageClient({ image }: SharePageClientProps) {
             alt="Shared dripped out image"
             width={intrinsicWidth}
             height={intrinsicHeight}
+            priority={true}
+            quality={90} // High quality for shared images
             className="w-full h-auto rounded-lg shadow-2xl"
             style={{ objectFit: "contain", maxHeight: "80vh" }}
-            priority={true}
             sizes="(max-width: 1024px) 100vw, 960px"
             placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
             blurDataURL={image.placeholderBlurDataUrl}
