@@ -189,6 +189,9 @@ export const updateFeaturedStatus = mutation({
   },
 });
 
+// DEPRECATED: This mutation bypasses credit checks and should NOT be used for new uploads
+// Use uploadAndScheduleGeneration instead for all user-initiated image uploads
+// This is kept only for backward compatibility with any legacy integrations
 export const sendImage = mutation({
   args: {
     storageId: v.id("_storage"),
@@ -202,6 +205,11 @@ export const sendImage = mutation({
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
+    // Log usage for monitoring
+    console.warn(
+      "[sendImage] DEPRECATED: This mutation bypasses credit checks. Use uploadAndScheduleGeneration instead."
+    );
+
     const sanitizedWidth =
       typeof args.originalWidth === "number" && Number.isFinite(args.originalWidth)
         ? Math.max(1, Math.round(args.originalWidth))
