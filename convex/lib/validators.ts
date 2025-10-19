@@ -11,6 +11,11 @@ export const GalleryItemValidator = v.object({
   featuredAt: v.optional(v.number()),
   isGenerated: v.optional(v.boolean()),
   originalImageId: v.optional(v.id("images")),
+  contentType: v.optional(v.string()),
+  originalWidth: v.optional(v.number()),
+  originalHeight: v.optional(v.number()),
+  originalSizeBytes: v.optional(v.number()),
+  placeholderBlurDataUrl: v.optional(v.string()),
   // Admin moderation flags may be present on documents
   isDisabledByAdmin: v.optional(v.boolean()),
   disabledByAdminAt: v.optional(v.number()),

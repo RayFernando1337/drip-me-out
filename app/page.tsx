@@ -51,15 +51,12 @@ export default function Home() {
 function Content() {
   const generateUploadUrl = useMutation(api.images.generateUploadUrl);
   const uploadAndScheduleGeneration = useMutation(api.images.uploadAndScheduleGeneration);
-  const retryOriginalMutation = useMutation(api.generate.retryOriginal);
-  const userCreditsData = useQuery(api.users.getCurrentUserCredits);
+  const retryOriginalMutation = useMutation(api.images.retryOriginal);
+  const userCredits = useQuery(api.users.getCurrentUserCredits);
 
-  // Initialize user record on first sign-in to grant initial credits
-
-  // Memoize credit-derived values to avoid unnecessary re-renders
-  const userCredits = useMemo(() => userCreditsData, [userCreditsData]);
-  const canUpload = useMemo(() => userCredits && userCredits.credits > 0, [userCredits]);
-  const isLoadingCredits = useMemo(() => userCredits === undefined, [userCredits]);
+  // Derived values for credits
+  const canUpload = userCredits && userCredits.credits > 0;
+  const isLoadingCredits = userCredits === undefined;
 
   const imageInput = useRef<HTMLInputElement>(null);
   const preparedRef = useRef<File | null>(null);
@@ -85,52 +82,55 @@ function Content() {
 
   const [allGalleryImages, setAllGalleryImages] = useState<GalleryImageType[]>([]);
 
-  // Use paginated query for better performance with proper memoization
-  const galleryResultData = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
-  const totalImagesCountData = useQuery(api.images.getGalleryImagesCount);
-  const failedImagesData = useQuery(api.images.getFailedImages);
-  const hasActiveGenerationsData = useQuery(api.images.hasActiveGenerations);
-
-  // Memoize query results to avoid unnecessary re-renders
-  const galleryResult = useMemo(() => galleryResultData, [galleryResultData]);
-  const totalImagesCount = useMemo(() => totalImagesCountData || 0, [totalImagesCountData]);
-  const failedImages = useMemo(() => failedImagesData || [], [failedImagesData]);
-  const hasActiveGenerations = useMemo(
-    () => hasActiveGenerationsData || false,
-    [hasActiveGenerationsData]
-  );
+  // Use paginated query for better performance
+  const galleryResult = useQuery(api.images.getGalleryImagesPaginated, { paginationOpts });
+  const totalImagesCount = useQuery(api.images.getGalleryImagesCount) || 0;
+  const failedImages = useQuery(api.images.getFailedImages) || [];
+  const hasActiveGenerations = useQuery(api.images.hasActiveGenerations) || false;
 
   // Handle pagination results with proper reactivity
   useEffect(() => {
     if (galleryResult?.page) {
+      console.log("[Gallery Update] Query returned", galleryResult.page.length, "images");
+      console.log(
+        "[Gallery Update] Image IDs:",
+        galleryResult.page.map((img) => ({
+          id: img._id,
+          isGenerated: img.isGenerated,
+          status: img.generationStatus,
+        }))
+      );
+
       setAllGalleryImages((prev) => {
         if (paginationOpts.cursor === null) {
           // First page - replace all images (handles new generations AND deletions)
+          console.log(
+            "[Gallery Update] Replacing with",
+            galleryResult.page.length,
+            "images (first page)"
+          );
           return galleryResult.page;
         } else {
           // Additional pages - append to existing images, avoiding duplicates
           const existingIds = new Set(prev.map((img) => img._id));
           const newImages = galleryResult.page.filter((img) => !existingIds.has(img._id));
+          console.log("[Gallery Update] Appending", newImages.length, "new images");
           return [...prev, ...newImages];
         }
       });
     }
   }, [galleryResult, paginationOpts.cursor]);
 
-  // Track total count to detect external additions (no hard reset on decreases)
-  const prevTotalCount = useRef(totalImagesCount);
+  // Track when active generations complete to trigger refresh
+  const prevHasActiveGenerations = useRef(hasActiveGenerations);
   useEffect(() => {
-    // If total count increases and we're on first page, Convex reactivity will refresh
-    prevTotalCount.current = totalImagesCount;
-  }, [totalImagesCount]);
-
-  // Auto-refresh when new images complete (reactive to total count changes)
-  useEffect(() => {
-    if (totalImagesCount > allGalleryImages.length && paginationOpts.cursor === null) {
-      // New images detected and we're on first page - this triggers fresh data fetch
-      // Convex reactivity will automatically refresh galleryResult
+    // When generation completes (true → false), reset to first page to show new image
+    if (prevHasActiveGenerations.current === true && hasActiveGenerations === false) {
+      console.log("[Gallery] Generation completed, resetting to first page");
+      setPaginationOpts({ numItems: 12, cursor: null });
     }
-  }, [totalImagesCount, allGalleryImages.length, paginationOpts.cursor]);
+    prevHasActiveGenerations.current = hasActiveGenerations;
+  }, [hasActiveGenerations]);
 
   // Load more function
   const loadMoreImages = useCallback(() => {
@@ -229,7 +229,14 @@ function Content() {
       try {
         // Prepare image (HEIC->JPEG, compress to <=5MB)
         const { prepareImageForUpload } = await import("@/lib/imagePrep");
-        const { file: prepared } = await prepareImageForUpload(file);
+        const {
+          file: preparedFile,
+          width: originalWidth,
+          height: originalHeight,
+          contentType,
+          placeholderBlurDataUrl,
+          sizeBytes,
+        } = await prepareImageForUpload(file);
         setIsPreparing(false);
 
         setIsUploading(true);
@@ -244,12 +251,12 @@ function Content() {
             const uploadUrl = await generateUploadUrl();
 
             // Only use keepalive for small files (< 64KB limit in Safari)
-            const useKeepAlive = prepared.size < 64 * 1024;
+            const useKeepAlive = preparedFile.size < 64 * 1024;
 
             const response = await fetch(uploadUrl, {
               method: "POST",
-              headers: { "Content-Type": prepared.type },
-              body: prepared,
+              headers: { "Content-Type": contentType },
+              body: preparedFile,
               ...(useKeepAlive && { keepalive: true }),
             });
 
@@ -260,7 +267,14 @@ function Content() {
             const { storageId } = await response.json();
 
             // Schedule generation using the consolidated backend mutation
-            await uploadAndScheduleGeneration({ storageId });
+            await uploadAndScheduleGeneration({
+              storageId,
+              originalWidth,
+              originalHeight,
+              contentType,
+              placeholderBlurDataUrl,
+              originalSizeBytes: sizeBytes,
+            });
 
             // Show credit usage feedback with updated balance
             const remainingCredits = Math.max(0, (userCredits?.credits || 0) - 1);

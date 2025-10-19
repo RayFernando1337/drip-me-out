@@ -1,8 +1,10 @@
+"use node";
+
 import { GoogleGenAI } from "@google/genai";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
-import { internalAction, internalQuery, mutation } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 
 /**
  * Helper function to convert ArrayBuffer to base64 (Convex-compatible)
@@ -17,141 +19,24 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 }
 
 /**
- * Helper function to convert base64 to Uint8Array (Convex-compatible)
- */
-function base64ToUint8Array(base64: string): Uint8Array {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(new ArrayBuffer(binaryString.length));
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-/**
  * Generate decorated image using Google's Gemini 2.5 Flash model
  * This is now an internal action that can be scheduled
  */
 /**
  * Update image generation status
  */
-export const updateImageStatus = mutation({
-  args: {
-    imageId: v.id("images"),
-    status: v.union(
-      v.literal("pending"),
-      v.literal("processing"),
-      v.literal("completed"),
-      v.literal("failed")
-    ),
-    error: v.optional(v.string()),
-  },
-  returns: v.null(),
-  handler: async (ctx, args) => {
-    const { imageId, status, error } = args;
-
-    const existing = await ctx.db.get(imageId);
-    if (!existing) {
-      return null;
-    }
-
-    const updateData: {
-      generationStatus: "pending" | "processing" | "completed" | "failed";
-      generationError?: string;
-    } = { generationStatus: status };
-    if (error) {
-      updateData.generationError = error;
-    }
-
-    await ctx.db.patch(imageId, updateData);
-    return null;
-  },
-});
+// moved to images.ts
 
 /**
  * Save generated image
  */
-export const saveGeneratedImage = mutation({
-  args: {
-    storageId: v.id("_storage"),
-    originalImageId: v.id("images"),
-  },
-  returns: v.union(v.id("images"), v.null()),
-  handler: async (ctx, args) => {
-    const { storageId, originalImageId } = args;
-    const originalImage = await ctx.db.get(originalImageId);
-    if (!originalImage) {
-      try {
-        await ctx.storage.delete(storageId);
-      } catch (error) {
-        console.warn("[saveGeneratedImage] Failed to delete orphaned storage", {
-          storageId,
-          error,
-        });
-      }
-      return null;
-    }
-
-    const generatedImageId = await ctx.db.insert("images", {
-      body: storageId,
-      createdAt: Date.now(),
-      isGenerated: true,
-      originalImageId: originalImageId,
-      userId: originalImage.userId,
-      sharingEnabled: originalImage.sharingEnabled,
-      shareExpiresAt: originalImage.shareExpiresAt,
-    });
-    return generatedImageId;
-  },
-});
+// moved to images.ts
 
 // Auto-retry once when generation fails.
-export const maybeRetryOnce = mutation({
-  args: { imageId: v.id("images") },
-  returns: v.boolean(),
-  handler: async (ctx, { imageId }) => {
-    const img = await ctx.db.get(imageId);
-    if (!img || img.isGenerated) return false;
-    const attempts = (img.generationAttempts ?? 0) + 1;
-    await ctx.db.patch(imageId, { generationAttempts: attempts });
-    if (attempts <= 1) {
-      // Reset to pending and clear error before retry
-      await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-      const storageId = img.body as unknown as Id<"_storage">;
-      const meta = await ctx.db.system.get(storageId);
-      const contentType: string | undefined = (meta as { contentType?: string } | null)
-        ?.contentType;
-      await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
-        storageId,
-        originalImageId: imageId,
-        contentType,
-      });
-      return true;
-    }
-    return false;
-  },
-});
+// moved to images.ts
 
 // Manual retry from UI
-export const retryOriginal = mutation({
-  args: { imageId: v.id("images") },
-  returns: v.null(),
-  handler: async (ctx, { imageId }) => {
-    const img = await ctx.db.get(imageId);
-    if (!img || img.isGenerated) return null;
-    // Reset status and error; do not modify attempts here (manual retries not limited)
-    await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
-    const storageId = img.body as unknown as Id<"_storage">;
-    const meta = await ctx.db.system.get(storageId);
-    const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
-    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
-      storageId,
-      originalImageId: imageId,
-      contentType,
-    });
-    return null;
-  },
-});
+// moved to images.ts
 
 export const generateImage = internalAction({
   args: {
@@ -174,7 +59,7 @@ export const generateImage = internalAction({
       }
 
       // Mark the original image as being processed
-      await ctx.runMutation(api.generate.updateImageStatus, {
+      await ctx.runMutation(api.images.updateImageStatus, {
         imageId: originalImageId,
         status: "processing",
       });
@@ -185,7 +70,7 @@ export const generateImage = internalAction({
         console.log(
           `[generateImage] Storage missing for originalImageId ${originalImageId}; skipping generation.`
         );
-        await ctx.runMutation(api.generate.updateImageStatus, {
+        await ctx.runMutation(api.images.updateImageStatus, {
           imageId: originalImageId,
           status: "failed",
           error: "Original image no longer available",
@@ -256,6 +141,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 
       // Find first inlineData part with image data
       let b64Out: string | null = null;
+      let geminiMimeType: string | null = null;
       const parts: Array<{
         text?: string;
         inlineData?: { mimeType?: string; data?: string };
@@ -264,6 +150,8 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       for (const part of parts) {
         if (part.inlineData?.data) {
           b64Out = part.inlineData.data;
+          // Extract the MIME type returned by Gemini (usually image/png)
+          geminiMimeType = part.inlineData.mimeType || null;
           break;
         }
       }
@@ -272,9 +160,12 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         throw new Error("Gemini response did not include image data");
       }
 
-      // Convert base64 to Uint8Array and store in Convex storage
-      const imageBuffer = base64ToUint8Array(b64Out);
-      const imageBlob = new Blob([imageBuffer as BlobPart], { type: "image/png" });
+      // Convert base64 directly to Blob and store in Convex
+      // Use Gemini's output MIME type (usually PNG) instead of the input MIME type
+      // to ensure the content type matches the actual image format
+      const imageBuffer = Buffer.from(b64Out, "base64");
+      const outputContentType = geminiMimeType || "image/png";
+      const imageBlob = new Blob([imageBuffer], { type: outputContentType });
       const generatedStorageId = await ctx.storage.store(imageBlob);
 
       // Verify the generated image was stored properly
@@ -284,13 +175,19 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       }
 
       // Save the generated image record
-      await ctx.runMutation(api.generate.saveGeneratedImage, {
+      // Width/height and blur placeholder can be undefined - Vercel will handle optimization
+      await ctx.runMutation(api.images.saveGeneratedImage, {
         storageId: generatedStorageId,
         originalImageId: originalImageId,
+        contentType: outputContentType,
+        width: undefined,
+        height: undefined,
+        sizeBytes: imageBuffer.byteLength,
+        placeholderBlurDataUrl: undefined,
       });
 
       // Mark the original image as completed
-      await ctx.runMutation(api.generate.updateImageStatus, {
+      await ctx.runMutation(api.images.updateImageStatus, {
         imageId: originalImageId,
         status: "completed",
       });
@@ -306,18 +203,19 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         error instanceof Error ? error.message : "Unknown error occurred during generation";
 
       try {
-        await ctx.runMutation(api.generate.updateImageStatus, {
+        await ctx.runMutation(api.images.updateImageStatus, {
           imageId: originalImageId,
           status: "failed",
           error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
-        
+
         // Attempt to refund credits for the failed generation
         try {
-          const originalImage = await ctx.runQuery(internal.generate.getImageById, { 
-            imageId: originalImageId 
-          });
+          const originalImage: { _id: Id<"images">; userId?: string } | null = await ctx.runQuery(
+            internal.images.getImageUserForRefund,
+            { imageId: originalImageId }
+          );
           if (originalImage?.userId) {
             const refundResult = await ctx.runMutation(api.users.refundCreditsForFailedGeneration, {
               userId: originalImage.userId,
@@ -325,7 +223,9 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
               reason: errorMessage,
             });
             if (refundResult.refunded) {
-              console.log(`[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`);
+              console.log(
+                `[generateImage] Refunded 1 credit to user ${originalImage.userId}. New balance: ${refundResult.newBalance}`
+              );
             }
           }
         } catch (refundError) {
@@ -348,7 +248,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 
       if (shouldRetry) {
         try {
-          const retried = await ctx.runMutation(api.generate.maybeRetryOnce, {
+          const retried = await ctx.runMutation(api.images.maybeRetryOnce, {
             imageId: originalImageId,
           });
           if (retried) {
@@ -371,21 +271,4 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 /**
  * Internal query to get image by ID (for refund functionality)
  */
-export const getImageById = internalQuery({
-  args: { imageId: v.id("images") },
-  returns: v.union(
-    v.object({
-      _id: v.id("images"),
-      userId: v.optional(v.string()),
-    }),
-    v.null()
-  ),
-  handler: async (ctx, { imageId }) => {
-    const image = await ctx.db.get(imageId);
-    if (!image) return null;
-    return {
-      _id: image._id,
-      userId: image.userId,
-    };
-  },
-});
+// moved to images.ts

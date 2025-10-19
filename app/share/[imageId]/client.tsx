@@ -1,9 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { ImageWithFallback } from "@/components/ui/ImageWithFallback";
 import { api } from "@/convex/_generated/api";
 import { FunctionReturnType } from "convex/server";
-import Image from "next/image";
 import Link from "next/link";
 
 // Use type inference from the API function for type safety
@@ -12,6 +12,9 @@ interface SharePageClientProps {
 }
 
 export default function SharePageClient({ image }: SharePageClientProps) {
+  const intrinsicWidth = image?.originalWidth ?? 1200;
+  const intrinsicHeight = image?.originalHeight ?? 800;
+
   // Check if image is null (not found)
   if (image === null) {
     return (
@@ -67,14 +70,18 @@ export default function SharePageClient({ image }: SharePageClientProps) {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
         <div className="relative w-full" style={{ maxHeight: "80vh" }}>
-          <Image
+          <ImageWithFallback
             src={image.url}
             alt="Shared dripped out image"
-            width={1200}
-            height={800}
+            width={intrinsicWidth}
+            height={intrinsicHeight}
+            priority={true}
+            quality={90} // High quality for shared images
             className="w-full h-auto rounded-lg shadow-2xl"
             style={{ objectFit: "contain", maxHeight: "80vh" }}
-            priority={true}
+            sizes="(max-width: 1024px) 100vw, 960px"
+            placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
+            blurDataURL={image.placeholderBlurDataUrl}
           />
         </div>
         <div className="mt-6 text-center">

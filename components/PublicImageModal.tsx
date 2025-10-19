@@ -9,9 +9,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { SignInButton } from "@clerk/nextjs";
-import Image from "next/image";
 import { memo, useMemo } from "react";
 import type { PublicGalleryImage } from "./PublicGallery";
+import { ImageWithFallback } from "./ui/ImageWithFallback";
 
 interface PublicImageModalProps {
   image: PublicGalleryImage | null;
@@ -43,36 +43,27 @@ function PublicImageModal({ image, isOpen, onClose }: PublicImageModalProps) {
     return null;
   }
 
+  const intrinsicWidth = image.originalWidth ?? 1024;
+  const intrinsicHeight = image.originalHeight ?? 1024;
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => (!open ? onClose() : undefined)}>
       <DialogContent className="max-h-[90vh] max-w-4xl w-[min(96vw,960px)] overflow-y-auto p-0 md:overflow-hidden">
         <div className="flex h-full flex-col md:max-h-[90vh] md:flex-row">
           <div className="relative bg-black/5 md:flex-1">
-            <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
-              <Image
+            <div className="flex h-[min(60vh,420px)] w-full items-center justify-center p-4 md:h-full md:min-h-[520px]">
+              <ImageWithFallback
                 src={image.url}
                 alt="Featured transformation preview"
-                fill
-                className="object-contain"
+                width={intrinsicWidth}
+                height={intrinsicHeight}
+                priority={true} // Modal images are critical when opened
+                quality={90} // Higher quality for full-size viewing
+                className="h-auto w-full max-h-[min(60vh,420px)] md:max-h-[80vh] object-contain"
                 sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
-                priority={false}
-                onError={(event) => {
-                  const target = event.currentTarget;
-                  target.style.display = "none";
-                  const parent = target.parentElement;
-                  if (parent) {
-                    parent.innerHTML = `
-                      <div class=\"flex h-full items-center justify-center bg-muted text-muted-foreground\">
-                        <div class=\"space-y-2 text-center\">
-                          <svg class=\"mx-auto h-8 w-8 opacity-50\" fill=\"none\" viewBox=\"0 0 24 24\" stroke=\"currentColor\">
-                            <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"1.5\" d=\"M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z\"/>
-                          </svg>
-                          <div class=\"text-xs opacity-60\">Preview unavailable</div>
-                        </div>
-                      </div>
-                    `;
-                  }
-                }}
+                style={{ width: "100%", height: "auto" }}
+                placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
+                blurDataURL={image.placeholderBlurDataUrl}
               />
             </div>
             <div className="absolute left-4 top-4 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 px-3 py-1 text-xs font-medium text-white shadow-sm">

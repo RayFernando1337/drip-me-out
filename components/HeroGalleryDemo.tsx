@@ -33,6 +33,9 @@ export default function HeroGalleryDemo() {
         url: img.url,
         id: img._id,
         isFeatured: true,
+        placeholderBlurDataUrl: img.placeholderBlurDataUrl,
+        width: img.originalWidth,
+        height: img.originalHeight,
       }));
     }
     // Only show fallback images if query has completed and returned empty
@@ -41,6 +44,9 @@ export default function HeroGalleryDemo() {
         url,
         id: `fallback-${idx}`,
         isFeatured: false,
+        placeholderBlurDataUrl: undefined,
+        width: undefined,
+        height: undefined,
       }));
     }
     // Return empty array while loading (prevents flash of fallback images)
@@ -132,7 +138,12 @@ export default function HeroGalleryDemo() {
             {/* Right Column: Hero Image + Gallery Dock */}
             <div className="space-y-6">
               {/* Large Hero Image */}
-              <div className="relative w-full aspect-square rounded-3xl overflow-hidden shadow-2xl bg-muted/20">
+              <div
+                className="relative w-full rounded-3xl overflow-hidden shadow-2xl bg-muted/20"
+                style={{
+                  aspectRatio: `${allImages[safeSelectedIndex]?.width ?? 1024} / ${allImages[safeSelectedIndex]?.height ?? 1024}`,
+                }}
+              >
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={safeSelectedIndex}
@@ -140,15 +151,21 @@ export default function HeroGalleryDemo() {
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 1.05 }}
                     transition={{ duration: 0.3, ease: "easeInOut" }}
-                    className="relative w-full h-full"
+                    className="relative h-full w-full"
                   >
                     <ImageWithFallback
                       src={allImages[safeSelectedIndex].url}
                       alt="Featured anime transformation"
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 768px) 100vw, 50vw"
+                      width={allImages[safeSelectedIndex].width ?? 1024}
+                      height={allImages[safeSelectedIndex].height ?? 1024}
                       priority={true}
+                      quality={85} // High quality for hero showcase
+                      className="h-full w-full object-cover"
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      placeholder={
+                        allImages[safeSelectedIndex].placeholderBlurDataUrl ? "blur" : "empty"
+                      }
+                      blurDataURL={allImages[safeSelectedIndex].placeholderBlurDataUrl}
                     />
                   </motion.div>
                 </AnimatePresence>
@@ -185,14 +202,18 @@ export default function HeroGalleryDemo() {
                           ? "ring-4 ring-primary shadow-lg scale-105"
                           : "ring-2 ring-border/30 opacity-70 hover:opacity-100"
                       }
-                    `}
+                      `}
                     >
                       <ImageWithFallback
                         src={image.url}
                         alt={`Thumbnail ${index + 1}`}
-                        fill
-                        className="object-cover"
+                        width={image.width ?? 256}
+                        height={image.height ?? 256}
+                        quality={70} // Lower quality for small thumbnails
+                        className="h-full w-full object-cover"
                         sizes="80px"
+                        placeholder={image.placeholderBlurDataUrl ? "blur" : "empty"}
+                        blurDataURL={image.placeholderBlurDataUrl}
                       />
                     </button>
                   ))}

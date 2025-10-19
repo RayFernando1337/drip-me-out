@@ -13,8 +13,10 @@ const nextConfig: NextConfig = {
         pathname: "/api/storage/**",
       },
     ],
-    formats: ["image/avif", "image/webp"],
-    minimumCacheTTL: 60,
+    formats: ["image/webp"], // Single format to reduce transformations
+    minimumCacheTTL: 2678400, // 31 days - reduces cache writes and transformations
+    deviceSizes: [640, 750, 828, 1080, 1200], // Match actual usage patterns
+    imageSizes: [16, 32, 48, 64, 96, 128, 256], // Thumbnails
   },
 };
 

@@ -33,9 +33,9 @@ import {
   Share2,
   Trash2,
 } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
+import { ImageWithFallback } from "./ui/ImageWithFallback";
 
 // Infer the type from the actual query return type
 type ImageFromQuery = NonNullable<ReturnType<typeof useQuery<typeof api.images.getImages>>>[number];
@@ -134,6 +134,8 @@ export default function ImageModal({
   const adminLockMessage = adminLockReason
     ? `Removed by moderators: ${adminLockReason}`
     : "Removed by moderators. Contact support to request reinstatement.";
+  const intrinsicWidth = currentImage.originalWidth ?? 1024;
+  const intrinsicHeight = currentImage.originalHeight ?? 1024;
 
   const handleShare = async () => {
     const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/share/${currentImage._id}`;
@@ -257,14 +259,19 @@ export default function ImageModal({
       <DialogContent className="max-h-[90vh] max-w-5xl w-[min(96vw,960px)] overflow-y-auto p-0 md:overflow-hidden">
         <div className="flex h-full flex-col md:max-h-[90vh] md:flex-row">
           <div className="relative flex-1 bg-black/5">
-            <div className="relative h-[min(60vh,420px)] w-full md:h-full md:min-h-[520px]">
-              <Image
+            <div className="flex h-[min(60vh,420px)] w-full items-center justify-center p-4 md:h-full md:min-h-[520px]">
+              <ImageWithFallback
                 src={currentImage.url}
                 alt="Full size image"
-                fill
-                className="object-contain"
-                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
+                width={intrinsicWidth}
+                height={intrinsicHeight}
                 priority={true}
+                quality={90} // Higher quality for full-size modal viewing
+                className="h-auto w-full max-h-[min(60vh,420px)] md:max-h-[80vh] object-contain"
+                sizes="(max-width: 768px) 100vw, (max-width: 1024px) 60vw, 640px"
+                style={{ width: "100%", height: "auto" }}
+                placeholder={currentImage.placeholderBlurDataUrl ? "blur" : "empty"}
+                blurDataURL={currentImage.placeholderBlurDataUrl}
               />
 
               {/* Navigation buttons (only when navigation is enabled) */}

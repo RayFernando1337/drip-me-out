@@ -1,7 +1,8 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
+import { internalQuery, mutation, query } from "./_generated/server";
 import { assertOwner, requireIdentity } from "./lib/auth";
 import { mapImagesToUrls } from "./lib/images";
 import { getOrCreateUser } from "./lib/users";
@@ -19,10 +20,15 @@ export const generateUploadUrl = mutation({
 export const uploadAndScheduleGeneration = mutation({
   args: {
     storageId: v.id("_storage"),
+    originalWidth: v.number(),
+    originalHeight: v.number(),
+    contentType: v.string(),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    originalSizeBytes: v.optional(v.number()),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
-    const { storageId } = args;
+    const { storageId, originalWidth, originalHeight, contentType: declaredContentType } = args;
 
     // Require authentication
     const identity = await requireIdentity(ctx);
@@ -40,16 +46,50 @@ export const uploadAndScheduleGeneration = mutation({
     const meta = await ctx.db.system.get(storageId);
     if (!meta) throw new Error("VALIDATION: Missing storage metadata");
 
-    const allowed = new Set(["image/jpeg", "image/png", "image/heic", "image/heif"]);
-    const contentType: string | undefined = (meta as { contentType?: string }).contentType;
+    const allowed = new Set(["image/webp", "image/jpeg", "image/png", "image/heic", "image/heif"]);
+    const storageContentType: string | undefined = (meta as { contentType?: string }).contentType;
     const size: number | undefined = (meta as { size?: number }).size;
 
-    if (!contentType || !allowed.has(contentType)) {
+    if (!storageContentType || !allowed.has(storageContentType)) {
       throw new Error("VALIDATION: Unsupported content type");
     }
-    if (typeof size === "number" && size > 5 * 1024 * 1024) {
-      throw new Error("VALIDATION: File exceeds 5 MB limit");
+    if (typeof size === "number" && size > 3 * 1024 * 1024) {
+      throw new Error("VALIDATION: File exceeds 3 MB limit");
     }
+
+    if (storageContentType !== declaredContentType) {
+      console.warn("[uploadAndScheduleGeneration] Content type mismatch", {
+        storageContentType,
+        declaredContentType,
+        storageId,
+      });
+    }
+
+    const sanitizedWidth = Number.isFinite(originalWidth)
+      ? Math.max(1, Math.round(originalWidth))
+      : null;
+    const sanitizedHeight = Number.isFinite(originalHeight)
+      ? Math.max(1, Math.round(originalHeight))
+      : null;
+    if (!sanitizedWidth || !sanitizedHeight) {
+      throw new Error("VALIDATION: Invalid image dimensions");
+    }
+
+    const placeholderBlurDataUrl = args.placeholderBlurDataUrl?.length
+      ? args.placeholderBlurDataUrl
+      : undefined;
+    if (placeholderBlurDataUrl && placeholderBlurDataUrl.length > 10_000) {
+      throw new Error("VALIDATION: Blur placeholder too large");
+    }
+
+    const originalSizeBytes =
+      typeof size === "number"
+        ? size
+        : args.originalSizeBytes && Number.isFinite(args.originalSizeBytes)
+          ? Math.max(0, Math.round(args.originalSizeBytes))
+          : undefined;
+
+    const contentType = storageContentType;
 
     // Atomically decrement credits BEFORE scheduling generation
     await ctx.db.patch(user._id, {
@@ -68,6 +108,11 @@ export const uploadAndScheduleGeneration = mutation({
       userId,
       isFeatured: false,
       isDisabledByAdmin: false,
+      contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      originalSizeBytes,
+      placeholderBlurDataUrl,
     });
 
     // Schedule the image generation immediately
@@ -149,14 +194,41 @@ export const sendImage = mutation({
     storageId: v.id("_storage"),
     isGenerated: v.optional(v.boolean()),
     originalImageId: v.optional(v.id("images")),
+    contentType: v.optional(v.string()),
+    originalWidth: v.optional(v.number()),
+    originalHeight: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    originalSizeBytes: v.optional(v.number()),
   },
   returns: v.id("images"),
   handler: async (ctx, args) => {
+    const sanitizedWidth =
+      typeof args.originalWidth === "number" && Number.isFinite(args.originalWidth)
+        ? Math.max(1, Math.round(args.originalWidth))
+        : undefined;
+    const sanitizedHeight =
+      typeof args.originalHeight === "number" && Number.isFinite(args.originalHeight)
+        ? Math.max(1, Math.round(args.originalHeight))
+        : undefined;
+    const sanitizedPlaceholder =
+      args.placeholderBlurDataUrl && args.placeholderBlurDataUrl.length <= 10_000
+        ? args.placeholderBlurDataUrl
+        : undefined;
+    const sanitizedSize =
+      typeof args.originalSizeBytes === "number" && Number.isFinite(args.originalSizeBytes)
+        ? Math.max(0, Math.round(args.originalSizeBytes))
+        : undefined;
+
     return await ctx.db.insert("images", {
       body: args.storageId,
       createdAt: Date.now(),
       isGenerated: args.isGenerated,
       originalImageId: args.originalImageId,
+      contentType: args.contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      placeholderBlurDataUrl: sanitizedPlaceholder,
+      originalSizeBytes: sanitizedSize,
     });
   },
 });
@@ -257,6 +329,11 @@ export const getGalleryImages = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -394,6 +471,11 @@ export const getGalleryImagesPaginated = query({
         createdAt: v.number(),
         isGenerated: v.optional(v.boolean()),
         originalImageId: v.optional(v.id("images")),
+        contentType: v.optional(v.string()),
+        originalWidth: v.optional(v.number()),
+        originalHeight: v.optional(v.number()),
+        originalSizeBytes: v.optional(v.number()),
+        placeholderBlurDataUrl: v.optional(v.string()),
         generationStatus: v.optional(
           v.union(
             v.literal("pending"),
@@ -420,10 +502,17 @@ export const getGalleryImagesPaginated = query({
   }),
   handler: async (ctx, args) => {
     const identity = await requireIdentity(ctx);
-    // Fetch per-user, ordered by createdAt, and overfetch to account for filtering
+    console.log(
+      "[Gallery Query] Fetching for user:",
+      identity.subject,
+      "pagination:",
+      args.paginationOpts
+    );
+
+    // Fetch per-user, ordered by createdAt, with minimal overfetch for filtering
     const adjustedPaginationOpts = {
       ...args.paginationOpts,
-      numItems: Math.ceil(args.paginationOpts.numItems * 1.5),
+      numItems: Math.ceil(args.paginationOpts.numItems * 1.2), // Reduced from 1.5x to 1.2x
     };
 
     const result = await ctx.db
@@ -432,21 +521,33 @@ export const getGalleryImagesPaginated = query({
       .order("desc")
       .paginate(adjustedPaginationOpts);
 
-    // Efficiently filter for gallery items (avoid expensive operations)
+    console.log("[Gallery Query] Raw query returned", result.page.length, "images from DB");
+
+    // Show generated images AND processing originals for real-time feedback
+    // Hide completed originals (their generated version shows instead)
     const galleryImages: typeof result.page = [];
 
     for (const img of result.page) {
+      // Always show generated images
       if (img.isGenerated === true) {
         galleryImages.push(img);
+        console.log("[Gallery Query] Including generated image:", img._id);
         continue;
       }
+
+      // Show originals during processing for real-time user feedback
       const status = img.generationStatus;
       if (status === "pending" || status === "processing") {
         galleryImages.push(img);
+        console.log("[Gallery Query] Including processing original:", img._id, "status:", status);
+      } else if (status === "completed") {
+        console.log("[Gallery Query] Hiding completed original:", img._id);
       }
+      // Hide completed originals (only their generated results show)
     }
 
     const trimmedGalleryImages = galleryImages.slice(0, args.paginationOpts.numItems);
+    console.log("[Gallery Query] Returning", trimmedGalleryImages.length, "images after filtering");
 
     if (trimmedGalleryImages.length === 0) {
       return {
@@ -514,6 +615,11 @@ export const getImages = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -579,6 +685,11 @@ export const getImageById = query({
       createdAt: v.number(),
       isGenerated: v.optional(v.boolean()),
       originalImageId: v.optional(v.id("images")),
+      contentType: v.optional(v.string()),
+      originalWidth: v.optional(v.number()),
+      originalHeight: v.optional(v.number()),
+      originalSizeBytes: v.optional(v.number()),
+      placeholderBlurDataUrl: v.optional(v.string()),
       generationStatus: v.optional(
         v.union(
           v.literal("pending"),
@@ -646,5 +757,178 @@ export const updateShareSettings = mutation({
 
     await ctx.db.patch(imageId, updateData);
     return null;
+  },
+});
+
+// Moved from generate.ts: status update for originals
+export const updateImageStatus = mutation({
+  args: {
+    imageId: v.id("images"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    error: v.optional(v.string()),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const { imageId, status, error } = args;
+
+    const existing = await ctx.db.get(imageId);
+    if (!existing) {
+      return null;
+    }
+
+    const updateData: {
+      generationStatus: "pending" | "processing" | "completed" | "failed";
+      generationError?: string;
+    } = { generationStatus: status };
+    if (error) {
+      updateData.generationError = error;
+    }
+
+    await ctx.db.patch(imageId, updateData);
+    return null;
+  },
+});
+
+// Moved from generate.ts: persist generated image record
+export const saveGeneratedImage = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    originalImageId: v.id("images"),
+    contentType: v.optional(v.string()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
+    sizeBytes: v.optional(v.number()),
+  },
+  returns: v.union(v.id("images"), v.null()),
+  handler: async (ctx, args) => {
+    const {
+      storageId,
+      originalImageId,
+      contentType,
+      width,
+      height,
+      placeholderBlurDataUrl,
+      sizeBytes,
+    } = args;
+    const originalImage = await ctx.db.get(originalImageId);
+    if (!originalImage) {
+      try {
+        await ctx.storage.delete(storageId);
+      } catch (error) {
+        console.warn("[saveGeneratedImage] Failed to delete orphaned storage", {
+          storageId,
+          error,
+        });
+      }
+      return null;
+    }
+
+    const sanitizedWidth =
+      typeof width === "number" && Number.isFinite(width)
+        ? Math.max(1, Math.round(width))
+        : undefined;
+    const sanitizedHeight =
+      typeof height === "number" && Number.isFinite(height)
+        ? Math.max(1, Math.round(height))
+        : undefined;
+    const sanitizedPlaceholder =
+      placeholderBlurDataUrl && placeholderBlurDataUrl.length <= 10_000
+        ? placeholderBlurDataUrl
+        : undefined;
+    const sanitizedSize =
+      typeof sizeBytes === "number" && Number.isFinite(sizeBytes)
+        ? Math.max(0, Math.round(sizeBytes))
+        : undefined;
+
+    const generatedImageId = await ctx.db.insert("images", {
+      body: storageId,
+      createdAt: Date.now(),
+      isGenerated: true,
+      originalImageId: originalImageId,
+      userId: originalImage.userId,
+      sharingEnabled: originalImage.sharingEnabled,
+      shareExpiresAt: originalImage.shareExpiresAt,
+      contentType,
+      originalWidth: sanitizedWidth,
+      originalHeight: sanitizedHeight,
+      placeholderBlurDataUrl: sanitizedPlaceholder,
+      originalSizeBytes: sanitizedSize,
+    });
+    console.log(
+      "[saveGeneratedImage] Created generated image:",
+      generatedImageId,
+      "for user:",
+      originalImage.userId
+    );
+    return generatedImageId;
+  },
+});
+
+// Moved from generate.ts: auto-retry toggle
+export const maybeRetryOnce = mutation({
+  args: { imageId: v.id("images") },
+  returns: v.boolean(),
+  handler: async (ctx, { imageId }) => {
+    const img = await ctx.db.get(imageId);
+    if (!img || img.isGenerated) return false;
+    const attempts = (img.generationAttempts ?? 0) + 1;
+    await ctx.db.patch(imageId, { generationAttempts: attempts });
+    if (attempts <= 1) {
+      await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
+      const storageId = img.body as unknown as Id<"_storage">;
+      const meta = await ctx.db.system.get(storageId);
+      const contentType: string | undefined = (meta as { contentType?: string } | null)
+        ?.contentType;
+      await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
+        storageId,
+        originalImageId: imageId,
+        contentType,
+      });
+      return true;
+    }
+    return false;
+  },
+});
+
+// Moved from generate.ts: manual retry
+export const retryOriginal = mutation({
+  args: { imageId: v.id("images") },
+  returns: v.null(),
+  handler: async (ctx, { imageId }) => {
+    const img = await ctx.db.get(imageId);
+    if (!img || img.isGenerated) return null;
+    await ctx.db.patch(imageId, { generationStatus: "pending", generationError: undefined });
+    const storageId = img.body as unknown as Id<"_storage">;
+    const meta = await ctx.db.system.get(storageId);
+    const contentType: string | undefined = (meta as { contentType?: string } | null)?.contentType;
+    await ctx.scheduler.runAfter(0, internal.generate.generateImage, {
+      storageId,
+      originalImageId: imageId,
+      contentType,
+    });
+    return null;
+  },
+});
+
+// New internal query for refund logic (minimal shape)
+export const getImageUserForRefund = internalQuery({
+  args: { imageId: v.id("images") },
+  returns: v.union(
+    v.object({
+      _id: v.id("images"),
+      userId: v.optional(v.string()),
+    }),
+    v.null()
+  ),
+  handler: async (ctx, { imageId }) => {
+    const image = await ctx.db.get(imageId);
+    if (!image) return null;
+    return { _id: image._id, userId: image.userId };
   },
 });

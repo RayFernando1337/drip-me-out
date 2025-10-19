@@ -49,8 +49,28 @@ A feature moves through three stages. Maintain structure and naming throughout.
 - Completed patterns: `/documentation/features/completed/`
 - Future work: `/documentation/features/planned/`
 
+## Summary Files Policy
+
+**CRITICAL:** Never create summary/implementation files in the project root (`/`).
+
+All summary documents must go in:
+
+- `/documentation/fixes/` for bug fixes and improvements
+- `/documentation/features/completed/[feature-name]/` for feature summaries
+- `/documentation/features/active/` for in-progress summaries
+
+Examples of prohibited root files:
+
+- ❌ `/SUMMARY.md`
+- ❌ `/IMPLEMENTATION-SUMMARY.md`
+- ❌ `/REBRAND-SUMMARY.md`
+- ❌ Any `*-SUMMARY.md` or `SUMMARY-*.md` in root
+
+See [README.md](./README.md#summary-files--reports) for full policy.
+
 ## Notes for Agents
 
 - Do not introduce new directories or naming schemes without approval
 - Keep edits minimal and reversible; prefer moving files and fixing links over rewriting content
 - When you complete a feature move, note the destination path in your status update
+- **Always place summary files in `/documentation/` subdirectories, never in root**

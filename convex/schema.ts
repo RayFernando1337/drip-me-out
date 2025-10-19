@@ -7,6 +7,11 @@ export default defineSchema({
     createdAt: v.number(),
     isGenerated: v.optional(v.boolean()),
     originalImageId: v.optional(v.id("images")), // Reference to original image
+    contentType: v.optional(v.string()),
+    originalWidth: v.optional(v.number()),
+    originalHeight: v.optional(v.number()),
+    originalSizeBytes: v.optional(v.number()),
+    placeholderBlurDataUrl: v.optional(v.string()),
     generationStatus: v.optional(
       v.union(
         v.literal("pending"),
@@ -38,6 +43,7 @@ export default defineSchema({
     .index("by_userId", ["userId"]) // find by owner
     // User-scoped indexes for efficient queries
     .index("by_userId_and_createdAt", ["userId", "createdAt"]) // per-user feed ordering
+    .index("by_userId_and_isGenerated_and_createdAt", ["userId", "isGenerated", "createdAt"]) // efficient gallery filtering
     .index("by_userId_and_generationStatus", ["userId", "generationStatus"]) // fast status checks per user
     .index("by_isFeatured", ["isFeatured"]) // basic featured flag
     .index("by_isFeatured_and_featuredAt", ["isFeatured", "featuredAt"]) // sort by featured date
@@ -68,11 +74,7 @@ export default defineSchema({
     userId: v.string(), // Clerk subject
     amountCents: v.number(),
     creditsGranted: v.number(),
-    status: v.union(
-      v.literal("paid"),
-      v.literal("refunded"),
-      v.literal("failed")
-    ),
+    status: v.union(v.literal("paid"), v.literal("refunded"), v.literal("failed")),
     createdAt: v.number(),
   })
     .index("by_orderId", ["orderId"]) // ensure idempotency
@@ -91,11 +93,7 @@ export default defineSchema({
   // Checkout sessions for async Polar checkout creation
   checkoutSessions: defineTable({
     userId: v.string(), // Clerk subject
-    status: v.union(
-      v.literal("pending"),
-      v.literal("completed"),
-      v.literal("failed")
-    ),
+    status: v.union(v.literal("pending"), v.literal("completed"), v.literal("failed")),
     clientSecret: v.optional(v.string()), // Polar client secret when completed
     url: v.optional(v.string()), // Polar hosted checkout URL when completed
     checkoutId: v.optional(v.string()), // Polar checkout ID when completed
