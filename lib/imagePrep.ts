@@ -110,13 +110,14 @@ export async function prepareImageForUpload(file: File): Promise<Prepared> {
     wasTranscoded = true;
   }
 
-  // 2) Compress/downscale to ≤ 3 MB and max 1600px (only if needed)
+  // 2) Compress/downscale to ≤ 3 MB and max 1600px, and convert to WebP
   let compressed: File = working as File;
 
-  // Skip compression if image is already small enough (< 1MB)
+  // Check if we need compression OR format conversion
   const needsCompression = working.size > 1 * 1024 * 1024;
+  const needsConversion = (working as File).type !== "image/webp";
 
-  if (needsCompression) {
+  if (needsCompression || needsConversion) {
     type ImageCompression = (
       file: File,
       options: {
@@ -134,12 +135,13 @@ export async function prepareImageForUpload(file: File): Promise<Prepared> {
       maxWidthOrHeight: 1600,
       fileType: "image/webp",
       useWebWorker: true,
-      initialQuality: 0.82,
+      initialQuality: needsCompression ? 0.82 : 0.95, // Higher quality for format-only conversion
     });
 
     if (compressed.size < (working as File).size) wasCompressed = true;
   }
 
+  // At this point, compressed should always be WebP
   const normalizedFile =
     compressed.type === "image/webp"
       ? compressed
