@@ -189,49 +189,13 @@ export const updateFeaturedStatus = mutation({
   },
 });
 
-export const sendImage = mutation({
-  args: {
-    storageId: v.id("_storage"),
-    isGenerated: v.optional(v.boolean()),
-    originalImageId: v.optional(v.id("images")),
-    contentType: v.optional(v.string()),
-    originalWidth: v.optional(v.number()),
-    originalHeight: v.optional(v.number()),
-    placeholderBlurDataUrl: v.optional(v.string()),
-    originalSizeBytes: v.optional(v.number()),
-  },
-  returns: v.id("images"),
-  handler: async (ctx, args) => {
-    const sanitizedWidth =
-      typeof args.originalWidth === "number" && Number.isFinite(args.originalWidth)
-        ? Math.max(1, Math.round(args.originalWidth))
-        : undefined;
-    const sanitizedHeight =
-      typeof args.originalHeight === "number" && Number.isFinite(args.originalHeight)
-        ? Math.max(1, Math.round(args.originalHeight))
-        : undefined;
-    const sanitizedPlaceholder =
-      args.placeholderBlurDataUrl && args.placeholderBlurDataUrl.length <= 10_000
-        ? args.placeholderBlurDataUrl
-        : undefined;
-    const sanitizedSize =
-      typeof args.originalSizeBytes === "number" && Number.isFinite(args.originalSizeBytes)
-        ? Math.max(0, Math.round(args.originalSizeBytes))
-        : undefined;
-
-    return await ctx.db.insert("images", {
-      body: args.storageId,
-      createdAt: Date.now(),
-      isGenerated: args.isGenerated,
-      originalImageId: args.originalImageId,
-      contentType: args.contentType,
-      originalWidth: sanitizedWidth,
-      originalHeight: sanitizedHeight,
-      placeholderBlurDataUrl: sanitizedPlaceholder,
-      originalSizeBytes: sanitizedSize,
-    });
-  },
-});
+// REMOVED: sendImage mutation - bypassed credit checks and had no active callers
+// All image uploads must use uploadAndScheduleGeneration which:
+// 1. Requires authentication
+// 2. Checks user has sufficient credits
+// 3. Deducts credits atomically before generation
+// 4. Validates file metadata (size, type)
+// 5. Schedules generation job
 
 export const deleteImage = mutation({
   args: {
