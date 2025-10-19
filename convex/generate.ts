@@ -209,8 +209,41 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
           error: errorMessage,
         });
         console.log(`[generateImage] Marked image ${originalImageId} as failed: ${errorMessage}`);
+      } catch (updateError) {
+        console.error(
+          `[generateImage] CRITICAL: Failed to update image status to failed:`,
+          updateError
+        );
+        console.error(`[generateImage] Original generation error: ${errorMessage}`);
+        // This is critical - if we can't update status, the image will be stuck as "processing"
+      }
 
-        // Attempt to refund credits for the failed generation
+      // Only auto-retry if this wasn't an API key or fundamental configuration error
+      const shouldRetry =
+        !errorMessage.includes("API key") &&
+        !errorMessage.includes("not configured") &&
+        !errorMessage.includes("Missing storage metadata");
+
+      let retried = false;
+      if (shouldRetry) {
+        try {
+          retried = await ctx.runMutation(api.images.maybeRetryOnce, {
+            imageId: originalImageId,
+          });
+          if (retried) {
+            console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
+          }
+        } catch (retryError) {
+          console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
+        }
+      } else {
+        console.log(
+          `[generateImage] Skipping auto-retry for ${originalImageId} due to configuration error`
+        );
+      }
+
+      // Refund ONLY on final failure (i.e., when no retry was scheduled)
+      if (!retried) {
         try {
           const originalImage: { _id: Id<"images">; userId?: string } | null = await ctx.runQuery(
             internal.images.getImageUserForRefund,
@@ -231,36 +264,6 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
         } catch (refundError) {
           console.error(`[generateImage] Failed to refund credits:`, refundError);
         }
-      } catch (updateError) {
-        console.error(
-          `[generateImage] CRITICAL: Failed to update image status to failed:`,
-          updateError
-        );
-        console.error(`[generateImage] Original generation error: ${errorMessage}`);
-        // This is critical - if we can't update status, the image will be stuck as "processing"
-      }
-
-      // Only auto-retry if this wasn't an API key or fundamental configuration error
-      const shouldRetry =
-        !errorMessage.includes("API key") &&
-        !errorMessage.includes("not configured") &&
-        !errorMessage.includes("Missing storage metadata");
-
-      if (shouldRetry) {
-        try {
-          const retried = await ctx.runMutation(api.images.maybeRetryOnce, {
-            imageId: originalImageId,
-          });
-          if (retried) {
-            console.log(`[generateImage] Auto-retry scheduled for ${originalImageId}`);
-          }
-        } catch (retryError) {
-          console.error(`[generateImage] Failed to schedule auto-retry:`, retryError);
-        }
-      } else {
-        console.log(
-          `[generateImage] Skipping auto-retry for ${originalImageId} due to configuration error`
-        );
       }
     }
 
