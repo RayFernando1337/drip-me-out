@@ -141,6 +141,7 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
 
       // Find first inlineData part with image data
       let b64Out: string | null = null;
+      let geminiMimeType: string | null = null;
       const parts: Array<{
         text?: string;
         inlineData?: { mimeType?: string; data?: string };
@@ -149,6 +150,8 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       for (const part of parts) {
         if (part.inlineData?.data) {
           b64Out = part.inlineData.data;
+          // Extract the MIME type returned by Gemini (usually image/png)
+          geminiMimeType = part.inlineData.mimeType || null;
           break;
         }
       }
@@ -158,9 +161,10 @@ The goal: create a surreal moment where anime has leaked into reality in the mos
       }
 
       // Convert base64 directly to Blob and store in Convex
-      // Gemini already returns optimized images (~1.5MB), no need to re-compress
+      // Use Gemini's output MIME type (usually PNG) instead of the input MIME type
+      // to ensure the content type matches the actual image format
       const imageBuffer = Buffer.from(b64Out, "base64");
-      const outputContentType = mimeType || "image/png";
+      const outputContentType = geminiMimeType || "image/png";
       const imageBlob = new Blob([imageBuffer], { type: outputContentType });
       const generatedStorageId = await ctx.storage.store(imageBlob);
 
