@@ -26,6 +26,7 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 2678400, // 31 days - reduces cache writes and transformations
     deviceSizes: [640, 750, 828, 1080, 1200], // Match actual usage patterns
     imageSizes: [16, 32, 48, 64, 96, 128, 256], // Thumbnails
+    qualities: [75, 90], // 75 is Next.js default, 90 for high-quality modal/share images
   },
 };
 
