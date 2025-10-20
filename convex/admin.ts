@@ -1,6 +1,6 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import { assertAdmin, requireIdentity } from "./lib/auth";
 import { getEffectiveBillingSettings } from "./lib/billing";
@@ -230,7 +230,7 @@ export const getBillingSettings = query({
   }),
   handler: async (ctx) => {
     // Only admins may view/edit billing settings (to keep it simple)
-    await assertAdmin(ctx as any);
+    await assertAdmin(ctx);
     const settings = await ctx.db.query("billingSettings").take(1);
     if (settings.length === 0) {
       const eff = await getEffectiveBillingSettings(ctx);
@@ -241,7 +241,7 @@ export const getBillingSettings = query({
         isDefault: true,
       };
     }
-    const s = settings[0] as any;
+    const s = settings[0] as Doc<"billingSettings">;
     return {
       packPriceCents: s.packPriceCents,
       creditsPerPack: s.creditsPerPack,
@@ -263,7 +263,7 @@ export const updateBillingSettings = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    const identity = await assertAdmin(ctx as any);
+    const identity = await assertAdmin(ctx);
     const now = Date.now();
     const existing = await ctx.db.query("billingSettings").take(1);
     if (existing.length === 0) {
@@ -273,7 +273,8 @@ export const updateBillingSettings = mutation({
         updatedBy: identity.subject,
       });
     } else {
-      await ctx.db.patch((existing[0] as any)._id, {
+      const existingSettings = existing[0] as Doc<"billingSettings">;
+      await ctx.db.patch(existingSettings._id, {
         ...args,
         updatedAt: now,
         updatedBy: identity.subject,

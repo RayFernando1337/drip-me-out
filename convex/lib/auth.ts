@@ -1,3 +1,5 @@
+import type { MutationCtx, QueryCtx } from "../_generated/server";
+
 interface Identity {
   subject: string;
   publicMetadata?: Record<string, unknown> | undefined;
@@ -20,18 +22,7 @@ export async function assertOwner(ctx: Ctx, ownerId: string | undefined) {
   return identity;
 }
 
-type Db = {
-  query: (name: string) => {
-    withIndex: (
-      idx: string,
-      cb: (q: { eq: (field: string, value: string) => unknown }) => unknown
-    ) => {
-      unique: () => Promise<unknown>;
-    };
-  };
-};
-
-export async function assertAdmin(ctx: Ctx & { db: Db }) {
+export async function assertAdmin(ctx: QueryCtx | MutationCtx) {
   const identity = await requireIdentity(ctx);
   // Authoritative reactive check from Convex DB
   const existing = await ctx.db
