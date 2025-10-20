@@ -1,5 +1,6 @@
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { getBaseUrl } from "@/lib/utils";
 import { fetchQuery } from "convex/nextjs";
 import Image from "next/image";
 import SharePageClient from "./client";
@@ -19,20 +20,33 @@ export async function generateMetadata({ params }: { params: Promise<{ imageId: 
     };
   }
 
+  const siteUrl = getBaseUrl();
+  const pageUrl = `${siteUrl}/share/${imageId}`;
+  const imageUrl = image.url; // Convex URLs are already absolute
+
   return {
     title: "Check Out My Anime Transformation!",
     description: "Watch objects transform as anime leaks into reality. Create yours!",
     openGraph: {
       title: "Check Out My Anime Transformation!",
       description: "Watch objects transform as anime leaks into reality. Create yours!",
-      images: [{ url: image.url }],
+      url: pageUrl,
+      siteName: "Anime Leak",
+      images: [
+        {
+          url: imageUrl,
+          width: image.originalWidth ?? 1200,
+          height: image.originalHeight ?? 630,
+          alt: "Anime transformation - where anime leaks into reality",
+        },
+      ],
       type: "website",
     },
     twitter: {
       card: "summary_large_image",
       title: "Check Out My Anime Transformation!",
       description: "Watch objects transform as anime leaks into reality.",
-      images: [image.url],
+      images: [imageUrl],
     },
   };
 }

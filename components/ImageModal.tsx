@@ -20,6 +20,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import { getBaseUrl } from "@/lib/utils";
 import { useMutation, useQuery } from "convex/react";
 import {
   AlertTriangle,
@@ -138,7 +139,7 @@ export default function ImageModal({
   const intrinsicHeight = currentImage.originalHeight ?? 1024;
 
   const handleShare = async () => {
-    const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/share/${currentImage._id}`;
+    const shareUrl = `${getBaseUrl()}/share/${currentImage._id}`;
 
     try {
       await navigator.clipboard.writeText(shareUrl);
@@ -151,7 +152,7 @@ export default function ImageModal({
   };
 
   const handleTwitterShare = () => {
-    const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/share/${currentImage._id}`;
+    const shareUrl = `${getBaseUrl()}/share/${currentImage._id}`;
     const text = "Check out my anime transformation! Created with @RayFernando1337 🎨✨";
     const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(shareUrl)}`;
     window.open(twitterUrl, "_blank");

@@ -1,4 +1,5 @@
 import { Toaster } from "@/components/ui/sonner";
+import { getBaseUrl } from "@/lib/utils";
 import { ClerkProvider } from "@clerk/nextjs";
 import { Analytics } from "@vercel/analytics/next";
 import type { Metadata } from "next";
@@ -17,6 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getBaseUrl()),
   title: "Anime Leak - Where Anime Leaks Into Reality",
   description:
     "AI-powered anime transformation. Watch everyday objects leak into anime reality with whimsical illustrations and magical effects.",
