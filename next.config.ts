@@ -26,7 +26,10 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 2678400, // 31 days - reduces cache writes and transformations
     deviceSizes: [640, 750, 828, 1080, 1200], // Match actual usage patterns
     imageSizes: [16, 32, 48, 64, 96, 128, 256], // Thumbnails
-    qualities: [75, 90], // 75 is Next.js default, 90 for high-quality modal/share images
+    // Qualities config: Next.js 16 will require this. For now, omit to allow all qualities.
+    // See: https://nextjs.org/docs/messages/next-image-unconfigured-qualities
+    // We'll add this when upgrading to Next.js 16:
+    // qualities: [50, 70, 75, 85, 90, 100]
   },
 };
 
