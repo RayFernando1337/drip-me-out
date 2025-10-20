@@ -2,10 +2,9 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { requireIdentity } from "./lib/auth";
-import { mapImagesToUrls } from "./lib/images";
+import { assertAdmin, requireIdentity } from "./lib/auth";
 import { getEffectiveBillingSettings } from "./lib/billing";
-import { assertAdmin } from "./lib/auth";
+import { mapImagesToUrls } from "./lib/images";
 
 // Reactive admin utilities
 export const getAdminStatus = query({
@@ -172,6 +171,24 @@ export const getAdminFeaturedImages = query({
         isGenerated: v.optional(v.boolean()),
         originalImageId: v.optional(v.id("images")),
         disabledByAdminAt: v.optional(v.number()),
+        // New schema fields added for WebP support
+        contentType: v.optional(v.string()),
+        originalWidth: v.optional(v.number()),
+        originalHeight: v.optional(v.number()),
+        originalSizeBytes: v.optional(v.number()),
+        placeholderBlurDataUrl: v.optional(v.string()),
+        generationStatus: v.optional(
+          v.union(
+            v.literal("pending"),
+            v.literal("processing"),
+            v.literal("completed"),
+            v.literal("failed")
+          )
+        ),
+        generationError: v.optional(v.string()),
+        generationAttempts: v.optional(v.number()),
+        sharingEnabled: v.optional(v.boolean()),
+        shareExpiresAt: v.optional(v.number()),
       })
     ),
     isDone: v.boolean(),
