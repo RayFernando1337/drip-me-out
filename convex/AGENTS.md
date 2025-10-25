@@ -137,3 +137,50 @@ export const listItems = query({
 ## After Changes
 - Keep `bunx convex dev` open; fix errors it reports
 - Validate function registration and schema changes
+
+## Stacked Diffs for Convex Changes
+
+When making complex Convex changes, use stacked diffs (see root [AGENTS.md](../AGENTS.md#git-workflow-stacked-diffs-with-graphite)).
+
+### Recommended Stack Order
+
+1. **Schema** - Add fields, indexes (optional fields for safety)
+2. **Queries** - Read-only functions using new schema
+3. **Mutations** - Write operations
+4. **Actions** - External API calls (if needed)
+5. **Migration** - Backfill or cleanup mutations
+
+### Example: Adding User Preferences
+
+```bash
+gt create feat/preferences-schema
+# Add fields to schema.ts
+git commit -m "feat(schema): add user preferences fields"
+
+gt create feat/preferences-queries
+# Add getPreferences query
+git commit -m "feat(convex): add user preferences queries"
+
+gt create feat/preferences-mutations
+# Add updatePreferences mutation
+git commit -m "feat(convex): add user preferences mutations"
+
+gt stack submit
+```
+
+### Critical Rules for Stacked Convex Changes
+
+- **Always keep `bunx convex dev` running** while editing
+- **Test each layer** via Convex dashboard before creating next branch
+- **Schema changes first** - Functions can't reference fields that don't exist
+- **Use optional fields** - Prevents breaking existing data during deployment
+- **Include full validators** - Each function must have args + returns defined
+
+### Validation Per Stack Layer
+
+```bash
+# After each commit in the stack
+bunx convex dev          # Verifies schema, registers functions
+# Check dashboard for errors
+# Test new functions in dashboard console
+```

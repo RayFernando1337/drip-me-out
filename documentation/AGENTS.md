@@ -74,3 +74,74 @@ See [README.md](./README.md#summary-files--reports) for full policy.
 - Keep edits minimal and reversible; prefer moving files and fixing links over rewriting content
 - When you complete a feature move, note the destination path in your status update
 - **Always place summary files in `/documentation/` subdirectories, never in root**
+
+## Documenting Stacked Diffs
+
+When a feature uses stacked diffs (Graphite), document the stack plan:
+
+### Stack Plan Template
+
+Create `[feature-name]-stack-plan.md` in `/documentation/features/active/`:
+
+```markdown
+# [Feature Name] - Stacked Diff Plan
+
+## Overview
+Brief description of feature and why it needs stacking.
+
+## Stack Structure
+```
+main
+ ↓
+1. feat/feature-schema (description)
+ ↓
+2. feat/feature-queries (description)
+ ↓
+...
+```
+
+## Per-Stack Documentation
+
+For each branch in the stack:
+
+### Stack N: [Branch Name]
+**Branch:** `feat/branch-name`  
+**Parent:** `feat/parent-branch`  
+**Description:** What this branch changes
+
+#### Changes:
+- File 1: what changed
+- File 2: what changed
+
+#### Testing:
+```bash
+# Commands to verify this layer works
+```
+
+#### Commit message:
+```
+type(scope): short description
+
+- Bullet point details
+```
+
+### Execution Commands
+
+Full bash script showing gt commands to create the stack.
+
+### Example Stack Plan
+
+See `/documentation/features/active/admin-review-workflow-stack-plan.md` for complete reference.
+
+### When to Create Stack Plans
+
+- Feature requires 3+ dependent PRs
+- Complex changes spanning backend + frontend
+- Breaking changes that need careful sequencing
+- Migration/backfill required after deployment
+
+### Stack Plan Location
+
+- Planning: `/documentation/features/planned/[feature-name]-stack-plan.md`
+- Active: `/documentation/features/active/[feature-name]-stack-plan.md`
+- Completed: Move to `/documentation/features/completed/[feature-name]/[feature-name]-stack-plan.md`
