@@ -528,6 +528,11 @@ export const updateFeaturedStatus = mutation({
     // Check ownership using centralized auth helper
     await assertOwner(ctx, image.userId);
 
+    // Validate that admin-disabled images cannot be featured
+    if (args.isFeatured && image.isDisabledByAdmin) {
+      throw new Error("Cannot feature an image that has been disabled by an admin");
+    }
+
     // Update featured status
     await ctx.db.patch(args.imageId, {
       isFeatured: args.isFeatured,
