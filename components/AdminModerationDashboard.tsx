@@ -1,5 +1,6 @@
 "use client";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
 import { useMutation, useQuery } from "convex/react";
@@ -13,16 +14,22 @@ type FeaturedImagesResult = NonNullable<
 type FeaturedImage = FeaturedImagesResult["page"][number];
 
 export default function AdminModerationDashboard() {
+  const [activeTab, setActiveTab] = useState<"pending" | "approved">("pending");
   const [paginationOpts, setPaginationOpts] = useState({
     numItems: 20,
     cursor: null as string | null,
   });
+  const pendingImages = useQuery(api.admin.getPendingFeaturedImages, { paginationOpts });
   const featuredImages = useQuery(api.admin.getAdminFeaturedImages, { paginationOpts });
   const disableImage = useMutation(api.admin.disableFeaturedImage);
   const enableImage = useMutation(api.admin.enableFeaturedImage);
+  const approveImage = useMutation(api.admin.approveFeaturedImage);
+  const rejectImage = useMutation(api.admin.rejectFeaturedImage);
   const deleteImage = useMutation(api.images.deleteImage);
   const normalizeFeatured = useMutation(api.admin.normalizeFeaturedFlags);
   const [disableReason, setDisableReason] = useState("");
+  const [rejectReason, setRejectReason] = useState("");
+  const [rejectTarget, setRejectTarget] = useState<FeaturedImage | null>(null);
   const [selectedImageId, setSelectedImageId] = useState<Id<"images"> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<FeaturedImage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -36,6 +43,36 @@ export default function AdminModerationDashboard() {
 
   const handleEnableImage = async (imageId: Id<"images">) => {
     await enableImage({ imageId });
+  };
+
+  const handleApproveImage = async (imageId: Id<"images">) => {
+    try {
+      await approveImage({ imageId });
+      toast.success("Image approved", {
+        description: "Image is now live in the public gallery",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to approve image";
+      toast.error(message);
+    }
+  };
+
+  const handleRejectImage = async () => {
+    if (!rejectTarget) return;
+    try {
+      await rejectImage({
+        imageId: rejectTarget._id,
+        reason: rejectReason.trim() || "Does not meet quality standards"
+      });
+      toast.success("Image rejected", {
+        description: "User will be notified of the rejection",
+      });
+      setRejectTarget(null);
+      setRejectReason("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to reject image";
+      toast.error(message);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -94,6 +131,8 @@ export default function AdminModerationDashboard() {
     }
   };
 
+  const currentImages = activeTab === "pending" ? pendingImages : featuredImages;
+
   return (
     <div className="space-y-8 p-6">
       <div className="text-center space-y-2">
@@ -112,8 +151,17 @@ export default function AdminModerationDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {featuredImages?.page.map((image) => (
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pending" | "approved")}>
+        <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
+          <TabsTrigger value="pending">
+            Pending Review {pendingImages?.page.length ? `(${pendingImages.page.length})` : ""}
+          </TabsTrigger>
+          <TabsTrigger value="approved">Approved</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value={activeTab} className="mt-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {currentImages?.page.map((image) => (
           <div key={image._id} className="group">
             <div
               className={`bg-card border transition-all duration-200 overflow-hidden rounded-xl shadow-sm ${
@@ -152,55 +200,80 @@ export default function AdminModerationDashboard() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  {image.isDisabledByAdmin ? (
-                    <Button
-                      onClick={() => handleEnableImage(image._id)}
-                      variant="outline"
-                      size="sm"
-                      className="text-green-600 border-green-600 hover:bg-green-50"
-                    >
-                      Re-enable
-                    </Button>
+                  {activeTab === "pending" ? (
+                    <>
+                      <Button
+                        onClick={() => handleApproveImage(image._id)}
+                        variant="outline"
+                        size="sm"
+                        className="text-green-600 border-green-600 hover:bg-green-50 flex-1"
+                      >
+                        Approve
+                      </Button>
+                      <Button
+                        onClick={() => setRejectTarget(image)}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600 border-red-600 hover:bg-red-50 flex-1"
+                      >
+                        Reject
+                      </Button>
+                    </>
                   ) : (
-                    <Button
-                      onClick={() => setSelectedImageId(image._id)}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600 border-red-600 hover:bg-red-50"
-                    >
-                      Disable
-                    </Button>
+                    <>
+                      {image.isDisabledByAdmin ? (
+                        <Button
+                          onClick={() => handleEnableImage(image._id)}
+                          variant="outline"
+                          size="sm"
+                          className="text-green-600 border-green-600 hover:bg-green-50"
+                        >
+                          Re-enable
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => setSelectedImageId(image._id)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-600 hover:bg-red-50"
+                        >
+                          Disable
+                        </Button>
+                      )}
+                      <Button
+                        onClick={() => {
+                          setSelectedImageId(null);
+                          setDeleteTarget(image);
+                        }}
+                        variant="destructive"
+                        size="sm"
+                        className="ml-auto"
+                      >
+                        Delete
+                      </Button>
+                    </>
                   )}
-                  <Button
-                    onClick={() => {
-                      setSelectedImageId(null);
-                      setDeleteTarget(image);
-                    }}
-                    variant="destructive"
-                    size="sm"
-                    className="ml-auto"
-                  >
-                    Delete
-                  </Button>
                 </div>
               </div>
             </div>
           </div>
         ))}
-      </div>
+          </div>
 
-      {featuredImages?.continueCursor && !featuredImages.isDone && (
-        <div className="flex justify-center">
-          <Button
-            onClick={() =>
-              setPaginationOpts({ numItems: 20, cursor: featuredImages.continueCursor })
-            }
-            variant="ghost"
-          >
-            Load More Images
-          </Button>
-        </div>
-      )}
+          {currentImages?.continueCursor && !currentImages.isDone && (
+            <div className="flex justify-center mt-6">
+              <Button
+                onClick={() =>
+                  setPaginationOpts({ numItems: 20, cursor: currentImages.continueCursor })
+                }
+                variant="ghost"
+              >
+                Load More Images
+              </Button>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       {selectedImageId && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
@@ -284,6 +357,43 @@ export default function AdminModerationDashboard() {
                     Delete Image
                   </>
                 )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {rejectTarget && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full space-y-4">
+            <h3 className="text-lg font-semibold text-red-600">Reject Feature Request</h3>
+            <p className="text-sm text-muted-foreground">
+              This will notify the user that their feature request was declined. Please provide a
+              reason:
+            </p>
+            <textarea
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="e.g., Does not meet quality standards, inappropriate content, etc."
+              className="w-full p-3 border rounded-md min-h-[100px]"
+              rows={4}
+            />
+            <div className="flex gap-2 justify-end">
+              <Button
+                onClick={() => {
+                  setRejectTarget(null);
+                  setRejectReason("");
+                }}
+                variant="ghost"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRejectImage}
+                disabled={!rejectReason.trim()}
+                variant="destructive"
+              >
+                Reject Request
               </Button>
             </div>
           </div>
