@@ -33,6 +33,14 @@ export default defineSchema({
     isDisabledByAdmin: v.optional(v.boolean()), // Admin moderation
     disabledByAdminAt: v.optional(v.number()),
     disabledByAdminReason: v.optional(v.string()),
+
+    // Admin review workflow for featured images
+    featureRequestedAt: v.optional(v.number()), // When user requested featuring
+    featureApprovedAt: v.optional(v.number()), // When admin approved
+    featureApprovedBy: v.optional(v.string()), // Admin userId who approved
+    featureRejectedAt: v.optional(v.number()), // When admin rejected
+    featureRejectedBy: v.optional(v.string()), // Admin userId who rejected
+    featureRejectionReason: v.optional(v.string()), // Why it was rejected
   })
     .index("by_is_generated", ["isGenerated"])
     .index("by_originalImageId", ["originalImageId"])
@@ -51,7 +59,10 @@ export default defineSchema({
       "isFeatured",
       "isDisabledByAdmin",
       "featuredAt",
-    ]),
+    ])
+    // Admin review workflow indexes
+    .index("by_featureRequestedAt", ["featureRequestedAt"]) // pending queue chronological
+    .index("by_isFeatured_and_featureRequestedAt", ["isFeatured", "featureRequestedAt"]), // pending queue filtered
   admins: defineTable({
     userId: v.string(), // Clerk subject
     createdAt: v.number(),
