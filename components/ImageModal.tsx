@@ -29,6 +29,7 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Clock,
   Copy,
   Settings,
   Share2,
@@ -44,6 +45,10 @@ type ImageWithFeatured = ImageFromQuery & {
   isFeatured?: boolean;
   isDisabledByAdmin?: boolean;
   disabledByAdminReason?: string;
+  featureRequestedAt?: number;
+  featureApprovedAt?: number;
+  featureRejectedAt?: number;
+  featureRejectionReason?: string;
 };
 
 interface ImageModalProps {
@@ -401,6 +406,23 @@ export default function ImageModal({
                       <p className="text-sm text-muted-foreground">
                         When sharing is disabled, your image link will not be accessible to others.
                       </p>
+                    )}
+
+                    {extendedImage?.featureRejectedAt && extendedImage?.featureRejectionReason && (
+                      <div className="text-xs text-destructive bg-destructive/10 p-2 rounded-md flex items-start gap-2">
+                        <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+                        <div>
+                          <strong>Feature request declined:</strong>{" "}
+                          {extendedImage.featureRejectionReason}
+                        </div>
+                      </div>
+                    )}
+
+                    {isFeatured && extendedImage?.featureRequestedAt && !extendedImage?.featureApprovedAt && (
+                      <div className="text-xs text-yellow-600 dark:text-yellow-400 flex items-center gap-1 bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded-md">
+                        <Clock className="h-3 w-3" />
+                        <span>Pending admin approval - your image will appear in the public gallery once reviewed.</span>
+                      </div>
                     )}
 
                     <div className="flex items-center justify-between pt-2">
