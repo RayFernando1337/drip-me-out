@@ -189,6 +189,13 @@ export const getAdminFeaturedImages = query({
         generationAttempts: v.optional(v.number()),
         sharingEnabled: v.optional(v.boolean()),
         shareExpiresAt: v.optional(v.number()),
+        // Admin review workflow fields
+        featureRequestedAt: v.optional(v.number()),
+        featureApprovedAt: v.optional(v.number()),
+        featureApprovedBy: v.optional(v.string()),
+        featureRejectedAt: v.optional(v.number()),
+        featureRejectedBy: v.optional(v.string()),
+        featureRejectionReason: v.optional(v.string()),
       })
     ),
     isDone: v.boolean(),
@@ -204,6 +211,78 @@ export const getAdminFeaturedImages = query({
     const result = await ctx.db
       .query("images")
       .withIndex("by_isFeatured_and_featuredAt", (q) => q.eq("isFeatured", true))
+      .order("desc")
+      .paginate(args.paginationOpts);
+
+    const imagesWithUrls = await mapImagesToUrls(ctx, result.page);
+    return {
+      page: imagesWithUrls,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+// Query for pending featured images awaiting admin approval
+export const getPendingFeaturedImages = query({
+  args: {
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        _id: v.id("images"),
+        _creationTime: v.number(),
+        body: v.id("_storage"),
+        createdAt: v.number(),
+        featuredAt: v.optional(v.number()),
+        url: v.string(),
+        userId: v.optional(v.string()),
+        isFeatured: v.optional(v.boolean()),
+        isDisabledByAdmin: v.optional(v.boolean()),
+        disabledByAdminReason: v.optional(v.string()),
+        // extra fields that may be present on images
+        isGenerated: v.optional(v.boolean()),
+        originalImageId: v.optional(v.id("images")),
+        disabledByAdminAt: v.optional(v.number()),
+        // New schema fields added for WebP support
+        contentType: v.optional(v.string()),
+        originalWidth: v.optional(v.number()),
+        originalHeight: v.optional(v.number()),
+        originalSizeBytes: v.optional(v.number()),
+        placeholderBlurDataUrl: v.optional(v.string()),
+        generationStatus: v.optional(
+          v.union(
+            v.literal("pending"),
+            v.literal("processing"),
+            v.literal("completed"),
+            v.literal("failed")
+          )
+        ),
+        generationError: v.optional(v.string()),
+        generationAttempts: v.optional(v.number()),
+        sharingEnabled: v.optional(v.boolean()),
+        shareExpiresAt: v.optional(v.number()),
+        // Admin review workflow fields
+        featureRequestedAt: v.optional(v.number()),
+        featureApprovedAt: v.optional(v.number()),
+        featureApprovedBy: v.optional(v.string()),
+        featureRejectedAt: v.optional(v.number()),
+        featureRejectedBy: v.optional(v.string()),
+        featureRejectionReason: v.optional(v.string()),
+      })
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    await assertAdmin(ctx);
+
+    // Query images where isFeatured=true but not yet approved
+    const result = await ctx.db
+      .query("images")
+      .withIndex("by_isFeatured_and_featureRequestedAt", (q) => q.eq("isFeatured", true))
+      .filter((q) => q.eq(q.field("featureApprovedAt"), undefined))
       .order("desc")
       .paginate(args.paginationOpts);
 
