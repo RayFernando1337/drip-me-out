@@ -15,12 +15,16 @@ type FeaturedImage = FeaturedImagesResult["page"][number];
 
 export default function AdminModerationDashboard() {
   const [activeTab, setActiveTab] = useState<"pending" | "approved">("pending");
-  const [paginationOpts, setPaginationOpts] = useState({
+  const [pendingPaginationOpts, setPendingPaginationOpts] = useState({
     numItems: 20,
     cursor: null as string | null,
   });
-  const pendingImages = useQuery(api.admin.getPendingFeaturedImages, { paginationOpts });
-  const featuredImages = useQuery(api.admin.getAdminFeaturedImages, { paginationOpts });
+  const [approvedPaginationOpts, setApprovedPaginationOpts] = useState({
+    numItems: 20,
+    cursor: null as string | null,
+  });
+  const pendingImages = useQuery(api.admin.getPendingFeaturedImages, { paginationOpts: pendingPaginationOpts });
+  const featuredImages = useQuery(api.admin.getAdminFeaturedImages, { paginationOpts: approvedPaginationOpts });
   const disableImage = useMutation(api.admin.disableFeaturedImage);
   const enableImage = useMutation(api.admin.enableFeaturedImage);
   const approveImage = useMutation(api.admin.approveFeaturedImage);
@@ -34,18 +38,50 @@ export default function AdminModerationDashboard() {
   const [deleteTarget, setDeleteTarget] = useState<FeaturedImage | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isNormalizing, setIsNormalizing] = useState(false);
+  const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
 
   const handleDisableImage = async (imageId: Id<"images">) => {
-    await disableImage({ imageId, reason: disableReason || "Policy violation" });
-    setSelectedImageId(null);
-    setDisableReason("");
+    setProcessingIds(prev => new Set(prev).add(imageId));
+    try {
+      await disableImage({ imageId, reason: disableReason || "Policy violation" });
+      toast.success("Image disabled", {
+        description: "Image removed from public gallery",
+      });
+      setSelectedImageId(null);
+      setDisableReason("");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to disable image";
+      toast.error(message);
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(imageId);
+        return next;
+      });
+    }
   };
 
   const handleEnableImage = async (imageId: Id<"images">) => {
-    await enableImage({ imageId });
+    setProcessingIds(prev => new Set(prev).add(imageId));
+    try {
+      await enableImage({ imageId });
+      toast.success("Image re-enabled", {
+        description: "Image restored to public gallery",
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to enable image";
+      toast.error(message);
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(imageId);
+        return next;
+      });
+    }
   };
 
   const handleApproveImage = async (imageId: Id<"images">) => {
+    setProcessingIds(prev => new Set(prev).add(imageId));
     try {
       await approveImage({ imageId });
       toast.success("Image approved", {
@@ -54,11 +90,18 @@ export default function AdminModerationDashboard() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to approve image";
       toast.error(message);
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(imageId);
+        return next;
+      });
     }
   };
 
   const handleRejectImage = async () => {
     if (!rejectTarget) return;
+    setProcessingIds(prev => new Set(prev).add(rejectTarget._id));
     try {
       await rejectImage({
         imageId: rejectTarget._id,
@@ -72,6 +115,12 @@ export default function AdminModerationDashboard() {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to reject image";
       toast.error(message);
+    } finally {
+      setProcessingIds(prev => {
+        const next = new Set(prev);
+        next.delete(rejectTarget._id);
+        return next;
+      });
     }
   };
 
@@ -131,7 +180,9 @@ export default function AdminModerationDashboard() {
     }
   };
 
+  // Filter out images being processed for optimistic UI updates
   const currentImages = activeTab === "pending" ? pendingImages : featuredImages;
+  const filteredImages = currentImages?.page.filter(img => !processingIds.has(img._id));
 
   return (
     <div className="space-y-8 p-6">
@@ -154,14 +205,14 @@ export default function AdminModerationDashboard() {
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "pending" | "approved")}>
         <TabsList className="grid w-full max-w-md mx-auto grid-cols-2">
           <TabsTrigger value="pending">
-            Pending Review {pendingImages?.page.length ? `(${pendingImages.page.length})` : ""}
+            Pending Review {pendingImages?.page.length ? `(${pendingImages.page.length}${pendingImages.isDone ? "" : "+"})` : ""}
           </TabsTrigger>
           <TabsTrigger value="approved">Approved</TabsTrigger>
         </TabsList>
 
         <TabsContent value={activeTab} className="mt-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {currentImages?.page.map((image) => (
+            {filteredImages?.map((image) => (
           <div key={image._id} className="group">
             <div
               className={`bg-card border transition-all duration-200 overflow-hidden rounded-xl shadow-sm ${
@@ -207,14 +258,16 @@ export default function AdminModerationDashboard() {
                         variant="outline"
                         size="sm"
                         className="text-green-600 border-green-600 hover:bg-green-50 flex-1"
+                        disabled={processingIds.has(image._id)}
                       >
-                        Approve
+                        {processingIds.has(image._id) ? "Approving..." : "Approve"}
                       </Button>
                       <Button
                         onClick={() => setRejectTarget(image)}
                         variant="outline"
                         size="sm"
                         className="text-red-600 border-red-600 hover:bg-red-50 flex-1"
+                        disabled={processingIds.has(image._id)}
                       >
                         Reject
                       </Button>
@@ -227,8 +280,9 @@ export default function AdminModerationDashboard() {
                           variant="outline"
                           size="sm"
                           className="text-green-600 border-green-600 hover:bg-green-50"
+                          disabled={processingIds.has(image._id)}
                         >
-                          Re-enable
+                          {processingIds.has(image._id) ? "Enabling..." : "Re-enable"}
                         </Button>
                       ) : (
                         <Button
@@ -236,6 +290,7 @@ export default function AdminModerationDashboard() {
                           variant="outline"
                           size="sm"
                           className="text-red-600 border-red-600 hover:bg-red-50"
+                          disabled={processingIds.has(image._id)}
                         >
                           Disable
                         </Button>
@@ -264,7 +319,9 @@ export default function AdminModerationDashboard() {
             <div className="flex justify-center mt-6">
               <Button
                 onClick={() =>
-                  setPaginationOpts({ numItems: 20, cursor: currentImages.continueCursor })
+                  activeTab === "pending"
+                    ? setPendingPaginationOpts({ numItems: 20, cursor: currentImages.continueCursor })
+                    : setApprovedPaginationOpts({ numItems: 20, cursor: currentImages.continueCursor })
                 }
                 variant="ghost"
               >
@@ -390,10 +447,10 @@ export default function AdminModerationDashboard() {
               </Button>
               <Button
                 onClick={handleRejectImage}
-                disabled={!rejectReason.trim()}
                 variant="destructive"
+                disabled={rejectTarget ? processingIds.has(rejectTarget._id) : false}
               >
-                Reject Request
+                {rejectTarget && processingIds.has(rejectTarget._id) ? "Rejecting..." : "Reject Request"}
               </Button>
             </div>
           </div>
