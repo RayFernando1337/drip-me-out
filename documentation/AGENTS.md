@@ -93,9 +93,13 @@ Brief description of feature and why it needs stacking.
 ```
 main
  ↓
-1. feat/feature-schema (description)
+1. feat/feature-flag (introduce toggle / guard, default OFF)
  ↓
-2. feat/feature-queries (description)
+2. feat/feature-schema (description)
+ ↓
+3. feat/feature-mutations (description)
+ ↓
+4. feat/feature-queries (description)
  ↓
 ...
 ```
@@ -125,20 +129,37 @@ type(scope): short description
 - Bullet point details
 ```
 
+#### Release plan:
+- How the stack stays safe while the flag is OFF
+- Which branch/preview validates the full stack before enabling
+- Steps to flip the flag or remove guards
+
 ### Execution Commands
 
 Full bash script showing gt commands to create the stack.
 
 Example:
 ```bash
-# Create first branch with changes
+# Introduce feature toggle / guard (default OFF)
+gt create --all --message "feat(flag): scaffold feature toggle"
+
+# Add backend schema
 gt create --all --message "feat(schema): add feature fields"
 
-# Create second branch stacked on first
+# Add backend mutations / actions
+gt create --all --message "feat(convex): add feature mutations"
+
+# Add backend queries / APIs
 gt create --all --message "feat(convex): add feature queries"
 
-# Continue stacking...
+# Add frontend (still behind flag)
 gt create --all --message "feat(ui): add feature UI"
+
+# Optional migration/backfill
+gt create --all --message "feat(data): backfill feature data"
+
+# Final flag flip / cleanup
+gt create --all --message "feat(flag): enable feature by default"
 
 # Submit entire stack
 gt submit --stack --no-interactive

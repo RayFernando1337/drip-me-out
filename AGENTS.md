@@ -101,28 +101,33 @@ gt sync            # Fetch latest main, rebase all stacks, offer to delete merge
 
 ### Stacked Diff Strategy
 
-When implementing a feature, break it into layers:
+When implementing a feature, break it into layers that keep every PR deployable:
 
-1. **Schema/Types** - Non-breaking database/type changes
-2. **Backend reads** - Queries that use new schema (read-only, safe)
-3. **Backend writes** - Mutations that modify data
-4. **Breaking changes** - Changes that affect existing behavior
-5. **Frontend** - UI that consumes new backend functions
-6. **Migration** - Backfill or cleanup (run once after deploy)
+1. **Feature flag / configuration** – Introduce guarded code paths or config toggles (default OFF) so downstream branches can ship safely.
+2. **Schema / Types** – Add optional fields or types behind the flag; avoid breaking existing data.
+3. **Backend writes** – Mutations, actions, schedulers that populate the new fields while respecting the disabled flag.
+4. **Backend reads / APIs** – Queries or HTTP endpoints that surface the new data but gracefully handle the flag OFF state.
+5. **Frontend** – UI hooked up to the guarded API; ensure it no-ops while the flag remains OFF.
+6. **Migration / Backfill** – One-off jobs to hydrate legacy data once the stack is ready.
+7. **Flag flip / cleanup** – Final branch that enables the feature (or removes guards) after the stack has been validated on a release preview branch.
 
 **Example stack:**
 ```
 main
  ↓
-feat/user-settings-schema        (add fields, indexes)
+feat/user-settings-flag          (introduce feature toggle + defaults)
  ↓
-feat/user-settings-queries       (read new fields)
+feat/user-settings-schema        (add optional fields, indexes)
  ↓
-feat/user-settings-mutations     (update new fields)
+feat/user-settings-mutations     (write new preferences behind flag)
  ↓
-feat/user-settings-ui            (settings page UI)
+feat/user-settings-queries       (read preferences, tolerate missing)
+ ↓
+feat/user-settings-ui            (settings page hidden behind flag)
  ↓
 feat/user-settings-migration     (backfill existing users)
+ ↓
+feat/user-settings-launch        (flip flag ON / remove guards)
 ```
 
 ### Best Practices
@@ -138,10 +143,11 @@ feat/user-settings-migration     (backfill existing users)
 
 When stacking Convex changes:
 
-1. **Schema first** - Deploy schema changes before functions that use them
-2. **Queries before mutations** - Read operations are safer to deploy first
-3. **Keep `bunx convex dev` running** - Catches errors immediately
-4. **Test each layer** - Use Convex dashboard to verify functions work
+1. **Start with flags/guards** so schema and functions stay dormant until launch.
+2. **Add schema** next; keep new fields optional and default-safe.
+3. **Implement mutations/actions** behind the flag, then expose queries/APIs that tolerate missing data.
+4. **Keep `bunx convex dev` running** to catch validator/index issues immediately.
+5. **Test each layer** via the Convex dashboard before moving to the next branch.
 
 ### Stack Submission Workflow
 

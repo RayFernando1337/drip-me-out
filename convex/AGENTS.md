@@ -144,23 +144,30 @@ When making complex Convex changes, use stacked diffs (see root [AGENTS.md](../A
 
 ### Recommended Stack Order
 
-1. **Schema** - Add fields, indexes (optional fields for safety)
-2. **Queries** - Read-only functions using new schema
-3. **Mutations** - Write operations
-4. **Actions** - External API calls (if needed)
-5. **Migration** - Backfill or cleanup mutations
+1. **Feature flag / config guard** – Introduce Convex-stored toggles or guard clauses (default OFF) so later branches remain safe to deploy.
+2. **Schema** – Add optional fields, indexes, or tables; avoid breaking existing documents.
+3. **Mutations / Actions** – Write paths that populate new data while respecting the disabled flag.
+4. **Queries** – Surface the new data but handle missing fields when the flag is OFF.
+5. **Migration** – Backfill or cleanup once the stack is validated.
+6. **Flag flip / cleanup** – Final branch to enable the new behavior or remove guards after preview validation.
 
 ### Example: Adding User Preferences
 
 ```bash
-# Make schema changes first
+# Introduce feature toggle document / guard
+gt create --all --message "feat(convex): scaffold user preferences flag"
+
+# Add schema updates (optional fields + indexes)
 gt create --all --message "feat(schema): add user preferences fields"
 
-# Add getPreferences query, commit changes
+# Implement write path behind the flag
+gt create --all --message "feat(convex): add user preferences mutations"
+
+# Expose read endpoint that tolerates missing data
 gt create --all --message "feat(convex): add user preferences queries"
 
-# Add updatePreferences mutation, commit changes
-gt create --all --message "feat(convex): add user preferences mutations"
+# (Optional) Hydrate historical data
+gt create --all --message "feat(convex): backfill user preferences"
 
 # Submit the entire stack
 gt submit --stack --no-interactive
@@ -170,7 +177,8 @@ gt submit --stack --no-interactive
 
 - **Always keep `bunx convex dev` running** while editing
 - **Test each layer** via Convex dashboard before creating next branch
-- **Schema changes first** - Functions can't reference fields that don't exist
+- **Start with flags/guards** so intermediate branches ship safely.
+- **Schema changes next** - Functions can't reference fields that don't exist
 - **Use optional fields** - Prevents breaking existing data during deployment
 - **Include full validators** - Each function must have args + returns defined
 
