@@ -134,11 +134,13 @@ export const getPublicGallery = query({
   returns: PaginatedGalleryValidator,
   handler: async (ctx, args) => {
     // Exclude admin-disabled items using compound index
+    // BREAKING CHANGE: Only show admin-approved images
     const result = await ctx.db
       .query("images")
       .withIndex("by_isFeatured_and_isDisabledByAdmin_and_featuredAt", (q) =>
         q.eq("isFeatured", true).eq("isDisabledByAdmin", false)
       )
+      .filter((q) => q.neq(q.field("featureApprovedAt"), undefined))
       .order("desc")
       .paginate(args.paginationOpts);
 
@@ -179,12 +181,33 @@ export const updateFeaturedStatus = mutation({
       );
     }
 
-    await ctx.db.patch(args.imageId, {
-      isFeatured: args.isFeatured,
-      featuredAt: args.isFeatured ? Date.now() : undefined,
-      // Ensure isDisabledByAdmin is explicitly set for compound index queries
-      isDisabledByAdmin: image.isDisabledByAdmin ?? false,
-    });
+    // BREAKING CHANGE: Feature requests now enter pending approval state
+    if (args.isFeatured) {
+      // User requests featuring - enters pending state
+      await ctx.db.patch(args.imageId, {
+        isFeatured: true,
+        featureRequestedAt: Date.now(),
+        featureApprovedAt: undefined, // Must be approved by admin
+        featuredAt: undefined, // Set by admin on approval
+        // Clear any previous rejection
+        featureRejectedAt: undefined,
+        featureRejectedBy: undefined,
+        featureRejectionReason: undefined,
+        isDisabledByAdmin: image.isDisabledByAdmin ?? false,
+      });
+    } else {
+      // User un-features - clear all feature timestamps
+      await ctx.db.patch(args.imageId, {
+        isFeatured: false,
+        featureRequestedAt: undefined,
+        featureApprovedAt: undefined,
+        featureApprovedBy: undefined,
+        featureRejectedAt: undefined,
+        featureRejectedBy: undefined,
+        featureRejectionReason: undefined,
+        featuredAt: undefined,
+      });
+    }
     return null;
   },
 });
