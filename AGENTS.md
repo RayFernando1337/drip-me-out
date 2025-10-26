@@ -66,19 +66,20 @@ This project uses **Graphite (gt CLI)** for managing stacked diffs. Break large 
 # View current stack
 gt log short        # Compact view of tracked branches
 gt log             # Detailed view with commit info
-gt log long        # Full git graph
+gt ls              # Alias for gt log short
 
-# Create a new branch in a stack
-gt create feat/my-feature-part1
-# Make changes, commit
-git add .
-git commit -m "feat: add schema fields"
+# Create a new branch with changes in one command
+gt create --all --message "feat: add schema fields"
+# This stages all changes, creates a branch, and commits in one step
 
 # Create next branch in stack (builds on current)
-gt create feat/my-feature-part2
-# Make changes, commit
-git add .
-git commit -m "feat: add queries for new fields"
+gt create --all --message "feat: add queries for new fields"
+# Automatically stacks on the current branch
+
+# Update current branch with new changes
+gt modify --all    # Stages changes, amends commit, auto-restacks descendants
+# Or to add a new commit instead of amending:
+gt modify --commit --all --message "fix: address review feedback"
 
 # Navigate the stack
 gt up              # Move to parent branch (upstack)
@@ -87,11 +88,15 @@ gt top             # Jump to top of stack
 gt bottom          # Jump to base of stack
 
 # Submit entire stack as PRs
-gt stack submit    # Creates/updates PRs for all branches in stack
+gt submit --stack --no-interactive
+# Creates/updates PRs for all branches in stack
+
+# Update and resubmit after making changes
+gt modify --all
+gt submit --stack --no-interactive
 
 # Rebase stack when main updates
-gt sync            # Fetch latest main
-gt stack restack   # Rebase entire stack onto main
+gt sync            # Fetch latest main, rebase all stacks, offer to delete merged branches
 ```
 
 ### Stacked Diff Strategy
@@ -142,13 +147,15 @@ When stacking Convex changes:
 
 ```bash
 # From any branch in your stack
-gt stack submit
+gt submit --stack --no-interactive
 
 # This will:
 # 1. Push all branches in the stack to GitHub
 # 2. Create/update PRs for each branch
 # 3. Set correct base branches (each PR targets its parent)
 # 4. Return URLs for all created PRs
+
+# Note: gt stack submit is deprecated, use gt submit --stack instead
 ```
 
 ### Example: Real Stack from This Project
@@ -159,15 +166,18 @@ See `documentation/features/active/admin-review-workflow-stack-plan.md` for a co
 
 ```bash
 # If stack gets messy
-gt stack restack          # Rebase everything onto correct parents
+gt sync                  # Rebase everything onto latest trunk
+gt restack               # Rebase current branch and descendants
 
 # If you need to modify a middle branch
 gt checkout feat/middle-branch
 # Make changes
-git add .
-git commit --amend       # Or create new commit
-gt stack restack         # Reapply all downstream branches
-gt stack submit          # Update all affected PRs
+gt modify --all                          # Amend and auto-restack descendants
+gt submit --stack --no-interactive       # Update all affected PRs
+
+# Or to add a new commit instead of amending
+gt modify --commit --all --message "fix: address feedback"
+gt submit --stack --no-interactive
 ```
 
 ### Integration with This Project

@@ -153,19 +153,17 @@ When making complex Convex changes, use stacked diffs (see root [AGENTS.md](../A
 ### Example: Adding User Preferences
 
 ```bash
-gt create feat/preferences-schema
-# Add fields to schema.ts
-git commit -m "feat(schema): add user preferences fields"
+# Make schema changes first
+gt create --all --message "feat(schema): add user preferences fields"
 
-gt create feat/preferences-queries
-# Add getPreferences query
-git commit -m "feat(convex): add user preferences queries"
+# Add getPreferences query, commit changes
+gt create --all --message "feat(convex): add user preferences queries"
 
-gt create feat/preferences-mutations
-# Add updatePreferences mutation
-git commit -m "feat(convex): add user preferences mutations"
+# Add updatePreferences mutation, commit changes
+gt create --all --message "feat(convex): add user preferences mutations"
 
-gt stack submit
+# Submit the entire stack
+gt submit --stack --no-interactive
 ```
 
 ### Critical Rules for Stacked Convex Changes

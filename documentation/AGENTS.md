@@ -129,6 +129,33 @@ type(scope): short description
 
 Full bash script showing gt commands to create the stack.
 
+Example:
+```bash
+# Create first branch with changes
+gt create --all --message "feat(schema): add feature fields"
+
+# Create second branch stacked on first
+gt create --all --message "feat(convex): add feature queries"
+
+# Continue stacking...
+gt create --all --message "feat(ui): add feature UI"
+
+# Submit entire stack
+gt submit --stack --no-interactive
+```
+
+To update a branch in the stack:
+```bash
+# Checkout the branch to update
+gt checkout feat/branch-name
+
+# Make changes, then amend and auto-restack
+gt modify --all
+
+# Submit updated stack
+gt submit --stack --no-interactive
+```
+
 ### Example Stack Plan
 
 See `/documentation/features/active/admin-review-workflow-stack-plan.md` for complete reference.

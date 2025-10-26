@@ -1,7 +1,7 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { assertAdmin, requireIdentity } from "./lib/auth";
 import { getEffectiveBillingSettings } from "./lib/billing";
 import { mapImagesToUrls } from "./lib/images";
@@ -354,11 +354,10 @@ export const getPendingFeaturedImages = query({
 });
 
 // One-time migration: backfill featureApprovedAt for legacy featured images
-export const backfillFeaturedApprovals = mutation({
+export const backfillFeaturedApprovals = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
-    await assertAdmin(ctx);
 
     // Find all featured images without approval timestamp
     const featured = await ctx.db
@@ -369,7 +368,7 @@ export const backfillFeaturedApprovals = mutation({
 
     for (const img of featured) {
       await ctx.db.patch(img._id, {
-        featureApprovedAt: img.featuredAt ?? Date.now(),
+        featureApprovedAt: img.featuredAt ?? img.createdAt,
         featureApprovedBy: "SYSTEM_MIGRATION",
         featureRequestedAt: img.featuredAt ?? img.createdAt,
       });
