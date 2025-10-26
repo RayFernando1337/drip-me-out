@@ -223,6 +223,64 @@ export const getAdminFeaturedImages = query({
   },
 });
 
+// Approve a pending featured image (admin only)
+export const approveFeaturedImage = mutation({
+  args: {
+    imageId: v.id("images"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertAdmin(ctx);
+    const identity = await requireIdentity(ctx);
+
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+    if (!image.isFeatured) throw new Error("Image not marked for featuring");
+    if (image.featureApprovedAt) throw new Error("Already approved");
+
+    await ctx.db.patch(args.imageId, {
+      featureApprovedAt: Date.now(),
+      featureApprovedBy: identity.subject,
+      featuredAt: Date.now(), // Public gallery sorts by this
+      // Clear rejection fields if previously rejected
+      featureRejectedAt: undefined,
+      featureRejectedBy: undefined,
+      featureRejectionReason: undefined,
+    });
+    return null;
+  },
+});
+
+// Reject a pending featured image (admin only)
+export const rejectFeaturedImage = mutation({
+  args: {
+    imageId: v.id("images"),
+    reason: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await assertAdmin(ctx);
+    const identity = await requireIdentity(ctx);
+
+    const image = await ctx.db.get(args.imageId);
+    if (!image) throw new Error("Image not found");
+    if (!image.isFeatured) throw new Error("Image not marked for featuring");
+
+    await ctx.db.patch(args.imageId, {
+      isFeatured: false, // Remove feature flag
+      featureRejectedAt: Date.now(),
+      featureRejectedBy: identity.subject,
+      featureRejectionReason: args.reason.trim(),
+      // Clear approval fields
+      featureApprovedAt: undefined,
+      featureApprovedBy: undefined,
+      featureRequestedAt: undefined,
+      featuredAt: undefined,
+    });
+    return null;
+  },
+});
+
 // Query for pending featured images awaiting admin approval
 export const getPendingFeaturedImages = query({
   args: {
