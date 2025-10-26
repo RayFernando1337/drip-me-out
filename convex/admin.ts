@@ -353,6 +353,32 @@ export const getPendingFeaturedImages = query({
   },
 });
 
+// One-time migration: backfill featureApprovedAt for legacy featured images
+export const backfillFeaturedApprovals = mutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    await assertAdmin(ctx);
+
+    // Find all featured images without approval timestamp
+    const featured = await ctx.db
+      .query("images")
+      .withIndex("by_isFeatured", (q) => q.eq("isFeatured", true))
+      .filter((q) => q.eq(q.field("featureApprovedAt"), undefined))
+      .collect();
+
+    for (const img of featured) {
+      await ctx.db.patch(img._id, {
+        featureApprovedAt: img.featuredAt ?? Date.now(),
+        featureApprovedBy: "SYSTEM_MIGRATION",
+        featureRequestedAt: img.featuredAt ?? img.createdAt,
+      });
+    }
+
+    return featured.length;
+  },
+});
+
 // Admin billing settings (reactive)
 export const getBillingSettings = query({
   args: {},
