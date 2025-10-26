@@ -1,7 +1,7 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import { assertAdmin, requireIdentity } from "./lib/auth";
 import { getEffectiveBillingSettings } from "./lib/billing";
 import { mapImagesToUrls } from "./lib/images";
@@ -350,6 +350,31 @@ export const getPendingFeaturedImages = query({
       isDone: result.isDone,
       continueCursor: result.continueCursor,
     };
+  },
+});
+
+// One-time migration: backfill featureApprovedAt for legacy featured images
+export const backfillFeaturedApprovals = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+
+    // Find all featured images without approval timestamp
+    const featured = await ctx.db
+      .query("images")
+      .withIndex("by_isFeatured", (q) => q.eq("isFeatured", true))
+      .filter((q) => q.eq(q.field("featureApprovedAt"), undefined))
+      .collect();
+
+    for (const img of featured) {
+      await ctx.db.patch(img._id, {
+        featureApprovedAt: img.featuredAt ?? img.createdAt,
+        featureApprovedBy: "SYSTEM_MIGRATION",
+        featureRequestedAt: img.featuredAt ?? img.createdAt,
+      });
+    }
+
+    return featured.length;
   },
 });
 

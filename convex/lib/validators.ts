@@ -20,6 +20,13 @@ export const GalleryItemValidator = v.object({
   isDisabledByAdmin: v.optional(v.boolean()),
   disabledByAdminAt: v.optional(v.number()),
   disabledByAdminReason: v.optional(v.string()),
+  // Admin review workflow fields
+  featureRequestedAt: v.optional(v.number()),
+  featureApprovedAt: v.optional(v.number()),
+  featureApprovedBy: v.optional(v.string()),
+  featureRejectedAt: v.optional(v.number()),
+  featureRejectedBy: v.optional(v.string()),
+  featureRejectionReason: v.optional(v.string()),
 });
 
 export const PaginatedGalleryValidator = v.object({

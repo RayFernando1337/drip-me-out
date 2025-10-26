@@ -101,10 +101,11 @@ export default function AdminModerationDashboard() {
 
   const handleRejectImage = async () => {
     if (!rejectTarget) return;
-    setProcessingIds(prev => new Set(prev).add(rejectTarget._id));
+    const imageId = rejectTarget._id;
+    setProcessingIds(prev => new Set(prev).add(imageId));
     try {
       await rejectImage({
-        imageId: rejectTarget._id,
+        imageId,
         reason: rejectReason.trim() || "Does not meet quality standards"
       });
       toast.success("Image rejected", {
@@ -118,7 +119,7 @@ export default function AdminModerationDashboard() {
     } finally {
       setProcessingIds(prev => {
         const next = new Set(prev);
-        next.delete(rejectTarget._id);
+        next.delete(imageId);
         return next;
       });
     }
